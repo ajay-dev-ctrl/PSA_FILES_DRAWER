@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — PSA Secure</title>
+    <meta name="description" content="Secure protected dashboard. Requires valid authentication session.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #06080f;
+            --bg-card: #0d1117;
+            --bg-elevated: #161b22;
+            --border: #21262d;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --text-muted: #484f58;
+            --primary: #4f46e5;
+            --primary-hover: #6366f1;
+            --primary-glow: rgba(79, 70, 229, 0.18);
+            --success: #3fb950;
+            --success-bg: rgba(63, 185, 80, 0.08);
+            --danger: #f85149;
+            --font: 'Plus Jakarta Sans', sans-serif;
+            --radius: 14px;
+            --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg-base);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Background orbs ── */
+        body::before,
+        body::after {
+            content: '';
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(140px);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        body::before {
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(79, 70, 229, 0.1) 0%, transparent 70%);
+            top: -200px;
+            right: -200px;
+        }
+
+        body::after {
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.07) 0%, transparent 70%);
+            bottom: -100px;
+            left: -100px;
+        }
+
+        /* ── Loading overlay (shown while verifying session) ── */
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            background: var(--bg-base);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        #loading-overlay.hidden {
+            display: none;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* ── Navbar ── */
+        .navbar {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 40px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(13, 17, 23, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .nav-brand-icon {
+            width: 34px;
+            height: 34px;
+            background: linear-gradient(135deg, #4f46e5, #6366f1);
+            border-radius: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .session-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 99px;
+            padding: 6px 12px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .session-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 6px var(--success);
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-dot {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .btn-logout {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 8px 16px;
+            font-family: var(--font);
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .btn-logout:hover {
+            background: rgba(248, 81, 73, 0.08);
+            border-color: rgba(248, 81, 73, 0.3);
+            color: var(--danger);
+        }
+
+        /* ── Main content ── */
+        main {
+            position: relative;
+            z-index: 1;
+            flex: 1;
+            padding: 48px 40px;
+            max-width: 1100px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        /* ── Welcome section ── */
+        .welcome-section {
+            margin-bottom: 40px;
+            animation: fadeIn 0.5s ease both;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .welcome-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(63, 185, 80, 0.1);
+            border: 1px solid rgba(63, 185, 80, 0.2);
+            border-radius: 99px;
+            padding: 5px 12px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--success);
+            margin-bottom: 16px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .welcome-section h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            line-height: 1.2;
+            background: linear-gradient(135deg, #f0f6fc 40%, #8b949e);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .welcome-section p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        /* ── Stats grid ── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 24px;
+            animation: fadeIn 0.5s ease both;
+            transition: var(--transition);
+        }
+
+        .stat-card:hover {
+            border-color: rgba(79, 70, 229, 0.3);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .stat-card:nth-child(1) {
+            animation-delay: 0.1s;
+        }
+
+        .stat-card:nth-child(2) {
+            animation-delay: 0.15s;
+        }
+
+        .stat-card:nth-child(3) {
+            animation-delay: 0.2s;
+        }
+
+        .stat-card:nth-child(4) {
+            animation-delay: 0.25s;
+        }
+
+        .stat-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+        }
+
+        .stat-icon.purple {
+            background: rgba(79, 70, 229, 0.15);
+            color: #818cf8;
+        }
+
+        .stat-icon.green {
+            background: rgba(63, 185, 80, 0.12);
+            color: var(--success);
+        }
+
+        .stat-icon.blue {
+            background: rgba(88, 166, 255, 0.12);
+            color: #58a6ff;
+        }
+
+        .stat-icon.orange {
+            background: rgba(210, 153, 34, 0.12);
+            color: #e3b341;
+        }
+
+        .stat-value {
+            font-size: 1.6rem;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        /* ── Session info card ── */
+        .info-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 28px;
+            animation: fadeIn 0.5s 0.3s ease both;
+        }
+
+        .info-card h2 {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .info-table tr td {
+            padding: 12px 0;
+            font-size: 0.875rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .info-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .info-table td:first-child {
+            color: var(--text-secondary);
+            width: 40%;
+        }
+
+        .info-table td:last-child {
+            color: var(--text-primary);
+            font-weight: 600;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: var(--success-bg);
+            border: 1px solid rgba(63, 185, 80, 0.2);
+            color: var(--success);
+            border-radius: 99px;
+            padding: 3px 10px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            font-family: var(--font);
+        }
+
+        /* ── Security features ── */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .feature-card {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+            animation: fadeIn 0.5s ease both;
+        }
+
+        .feature-card h3 {
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .feature-card p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            .navbar {
+                padding: 14px 20px;
+            }
+
+            main {
+                padding: 28px 20px;
+            }
+
+            .welcome-section h1 {
+                font-size: 1.5rem;
+            }
+
+            .session-badge {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Loading overlay while verifying session -->
+    <div id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p style="color: var(--text-secondary); font-size: 0.9rem;">Verifying session…</p>
+    </div>
+
+    <!-- Navbar -->
+    <nav class="navbar">
+        <a href="#" class="nav-brand">
+            <div class="nav-brand-icon">
+                <svg width="18" height="18" fill="none" stroke="white" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"
+                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+            </div>
+            PSA Secure
+        </a>
+        <div class="nav-right">
+            <div class="session-badge">
+                <div class="session-dot"></div>
+                <span id="session-status-text">Session active</span>
+            </div>
+            <button class="btn-logout" id="btn-logout" onclick="AUTH.logout('login.html')">
+                <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Sign out
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main content -->
+    <main id="main-content" style="display:none;">
+
+        <!-- Welcome -->
+        <section class="welcome-section">
+            <div class="welcome-tag">
+                <svg width="10" height="10" fill="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" />
+                </svg>
+                Authenticated
+            </div>
+            <h1>Welcome back, <span id="user-email">user</span> 👋</h1>
+            <p>You are accessing a protected area. Your session is cryptographically secured with HMAC-SHA256.</p>
+        </section>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon purple">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                </div>
+                <div class="stat-value">PBKDF2</div>
+                <div class="stat-label">Password hashing algorithm</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon green">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                </div>
+                <div class="stat-value">100K</div>
+                <div class="stat-label">PBKDF2 iterations</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon blue">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    </svg>
+                </div>
+                <div class="stat-value">HMAC</div>
+                <div class="stat-label">Session token signing</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon orange">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <div class="stat-value" id="session-ttl">–</div>
+                <div class="stat-label">Session expires in</div>
+            </div>
+        </div>
+
+        <!-- Session info table -->
+        <div class="info-card">
+            <h2>🔐 Session Details</h2>
+            <table class="info-table">
+                <tr>
+                    <td>Authenticated user</td>
+                    <td id="tbl-email">—</td>
+                </tr>
+                <tr>
+                    <td>Session issued at</td>
+                    <td id="tbl-iat">—</td>
+                </tr>
+                <tr>
+                    <td>Session expires at</td>
+                    <td id="tbl-exp">—</td>
+                </tr>
+                <tr>
+                    <td>Token ID (jti)</td>
+                    <td id="tbl-jti">—</td>
+                </tr>
+                <tr>
+                    <td>Token integrity</td>
+                    <td><span class="status-chip">✓ HMAC-SHA256 verified</span></td>
+                </tr>
+                <tr>
+                    <td>Password storage</td>
+                    <td><span class="status-chip">✓ PBKDF2 hash only</span></td>
+                </tr>
+            </table>
+
+            <!-- Security feature cards -->
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>🛡️ Brute-force Protection</h3>
+                    <p>Account locks after 5 failed login attempts for 15 minutes.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>⏱️ Session Expiry</h3>
+                    <p>Session tokens automatically expire after 1 hour and require re-login.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🔑 Unique Salt</h3>
+                    <p>Every account has a 128-bit random salt — identical passwords hash differently.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🔒 Timing-safe Compare</h3>
+                    <p>HMAC verification uses constant-time comparison to prevent timing attacks.</p>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script src="security.js"></script>
+    <script>
+        (async () => {
+            // ── Verify session before showing any content ────────────
+            const session = await AUTH.requireAuth('login.html');
+            if (!session) return; // redirected
+
+            // ── Populate UI ──────────────────────────────────────────
+            const usernameShort = (session.email || session.username || 'user');
+            const displayName = usernameShort.length > 24 ? usernameShort.slice(0, 24) + '…' : usernameShort;
+
+            document.getElementById('user-email').textContent = displayName;
+            document.getElementById('tbl-email').textContent = session.email || session.username || '—';
+            document.getElementById('tbl-jti').textContent = session.jti;
+
+            const fmt = ts => new Date(ts).toLocaleString();
+            document.getElementById('tbl-iat').textContent = fmt(session.iat);
+            document.getElementById('tbl-exp').textContent = fmt(session.exp);
+
+            // ── Session TTL countdown ────────────────────────────────
+            function updateTTL() {
+                const ms = session.exp - Date.now();
+                if (ms <= 0) { AUTH.logout('login.html'); return; }
+                const m = Math.floor(ms / 60000);
+                const s = Math.floor((ms % 60000) / 1000);
+                document.getElementById('session-ttl').textContent = `${m}m ${s}s`;
+            }
+            updateTTL();
+            setInterval(updateTTL, 1000);
+
+            // ── Show content ─────────────────────────────────────────
+            document.getElementById('loading-overlay').classList.add('hidden');
+            document.getElementById('main-content').style.display = 'block';
+        })();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PSA — Sign In</title>
+    <meta name="description" content="Philippine Statistics Authority — Secure System Login">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* ── PSA logo watermark ── */
+        .bg-watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 680px;
+            height: 680px;
+            background-image: url('psa_logo.png');
+            background-repeat: no-repeat;
+            background-size: contain;
+            background-position: center;
+            opacity: 0.045;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── Card ── */
+        .card {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 360px;
+            padding: 48px 40px 40px;
+        }
+
+        /* ── Header ── */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header-logo {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 20px;
+            background-image: url('psa_logo.png');
+            background-repeat: no-repeat;
+            background-size: contain;
+            background-position: center;
+        }
+
+        .header h1 {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: #111111;
+            letter-spacing: 0.01em;
+            margin-bottom: 4px;
+        }
+
+        .header p {
+            font-size: 0.78rem;
+            color: #888888;
+            font-weight: 400;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+
+        /* ── Divider ── */
+        .header-divider {
+            width: 32px;
+            height: 2px;
+            background: #0038a8;
+            margin: 16px auto 0;
+            border-radius: 2px;
+        }
+
+        /* ── Form ── */
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.72rem;
+            font-weight: 500;
+            color: #555555;
+            margin-bottom: 7px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .form-input {
+            width: 100%;
+            border: 1px solid #d8d8d8;
+            border-radius: 4px;
+            padding: 11px 14px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9rem;
+            color: #111111;
+            background: #ffffff;
+            transition: border-color 0.15s ease;
+            outline: none;
+        }
+
+        .form-input::placeholder {
+            color: #bbbbbb;
+            font-weight: 300;
+        }
+
+        .form-input:focus {
+            border-color: #0038a8;
+        }
+
+        .form-input:disabled {
+            background: #f5f5f5;
+            cursor: not-allowed;
+        }
+
+        /* ── Alert ── */
+        .alert {
+            display: none;
+            font-size: 0.78rem;
+            padding: 10px 12px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+        .alert.show { display: block; }
+        .alert.error   { background: #fff2f2; border: 1px solid #f5c6c6; color: #c0392b; }
+        .alert.success { background: #f0fff4; border: 1px solid #b7dfb9; color: #1e7e34; }
+        .alert.warning { background: #fffbef; border: 1px solid #f0d58c; color: #856404; }
+
+        /* ── Lockout bar ── */
+        .lockout-bar {
+            display: none;
+            background: #fffbef;
+            border: 1px solid #f0d58c;
+            border-radius: 4px;
+            padding: 10px 12px;
+            margin-bottom: 16px;
+        }
+        .lockout-bar.show { display: block; }
+        .lockout-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .lockout-label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: #856404;
+        }
+        .lockout-timer {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #856404;
+            font-variant-numeric: tabular-nums;
+        }
+        .lockout-track {
+            width: 100%;
+            height: 3px;
+            background: #e8d5a0;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .lockout-fill {
+            height: 100%;
+            background: #856404;
+            border-radius: 2px;
+            transition: width 1s linear;
+        }
+
+
+
+        /* ── Submit button ── */
+        .btn-submit {
+            width: 100%;
+            padding: 12px;
+            background: #0038a8;
+            color: #ffffff;
+            border: none;
+            border-radius: 4px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.88rem;
+            font-weight: 500;
+            cursor: pointer;
+            letter-spacing: 0.04em;
+            transition: background 0.15s ease;
+            margin-top: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn-submit:hover { background: #002d8a; }
+        .btn-submit:active { background: #00236d; }
+        .btn-submit:disabled { background: #a0b4d6; cursor: not-allowed; }
+
+        .spinner {
+            width: 14px; height: 14px;
+            border: 2px solid rgba(255,255,255,0.4);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            display: none;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Register link ── */
+        .footer-row {
+            text-align: center;
+            margin-top: 24px;
+            font-size: 0.78rem;
+            color: #888888;
+        }
+        .footer-row a {
+            color: #0038a8;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .footer-row a:hover { text-decoration: underline; }
+
+        /* ── Footer note ── */
+        .system-note {
+            text-align: center;
+            margin-top: 32px;
+            font-size: 0.68rem;
+            color: #cccccc;
+            line-height: 1.6;
+            letter-spacing: 0.02em;
+        }
+    </style>
+</head>
+<body>
+
+<div class="bg-watermark"></div>
+
+<div class="card">
+
+    <div class="header">
+        <div class="header-logo"></div>
+        <h1>Philippine Statistics Authority</h1>
+        <p>Secure System Access</p>
+        <div class="header-divider"></div>
+    </div>
+
+    <!-- Lockout bar -->
+    <div class="lockout-bar" id="lockout-bar">
+        <div class="lockout-top">
+            <span class="lockout-label">Account temporarily locked</span>
+            <span class="lockout-timer" id="lockout-timer">—</span>
+        </div>
+        <div class="lockout-track">
+            <div class="lockout-fill" id="lockout-fill"></div>
+        </div>
+    </div>
+
+    <!-- Alert -->
+    <div class="alert" id="alert-box" role="alert"></div>
+
+    <form id="login-form" novalidate>
+
+        <div class="form-group">
+            <label class="form-label" for="username">Username</label>
+            <input class="form-input" type="text" id="username"
+                placeholder="Enter username" autocomplete="username" required>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" for="password">Password</label>
+            <input class="form-input" type="password" id="password"
+                placeholder="Enter password" autocomplete="current-password" required>
+
+
+        </div>
+
+        <button type="submit" class="btn-submit" id="btn-submit">
+            <div class="spinner" id="spinner"></div>
+            <span id="btn-text">Sign In</span>
+        </button>
+
+    </form>
+
+    <div class="footer-row">
+        No account? <a href="register.html">Register here</a>
+    </div>
+
+    <div class="system-note">
+        Authorized users only. All access attempts are logged.<br>
+        Unauthorized access is strictly prohibited.
+    </div>
+
+</div>
+
+<script src="security.js"></script>
+<script>
+let lockoutInterval = null;
+const LOCKOUT_TOTAL_MS = AUTH.LOCKOUT_MS;
+
+// ── Alert ─────────────────────────────────────────────────────
+function showAlert(msg, type = 'error') {
+    const box = document.getElementById('alert-box');
+    box.className = `alert show ${type}`;
+    box.textContent = msg;
+}
+function hideAlert() {
+    document.getElementById('alert-box').className = 'alert';
+}
+
+// ── Lockout UI ────────────────────────────────────────────────
+function startLockoutUI(remainingMs) {
+    clearInterval(lockoutInterval);
+    const startAt  = Date.now();
+    const bar      = document.getElementById('lockout-bar');
+    const fill     = document.getElementById('lockout-fill');
+    const timerEl  = document.getElementById('lockout-timer');
+    bar.classList.add('show');
+    setFormDisabled(true);
+
+    function tick() {
+        const elapsed   = Date.now() - startAt;
+        const remaining = remainingMs - elapsed;
+        if (remaining <= 0) {
+            clearInterval(lockoutInterval);
+            bar.classList.remove('show');
+            setFormDisabled(false);
+            hideAlert();
+            return;
+        }
+        const m = Math.floor(remaining / 60000);
+        const s = Math.floor((remaining % 60000) / 1000);
+        timerEl.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+        fill.style.width    = `${(remaining / LOCKOUT_TOTAL_MS) * 100}%`;
+    }
+    tick();
+    lockoutInterval = setInterval(tick, 1000);
+}
+
+
+
+// ── Form disable ──────────────────────────────────────────────
+function setFormDisabled(disabled) {
+    ['username', 'password', 'btn-submit'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = disabled;
+    });
+}
+
+// ── Loading state ─────────────────────────────────────────────
+function setLoading(on) {
+    document.getElementById('btn-submit').disabled = on;
+    document.getElementById('spinner').style.display = on ? 'block' : 'none';
+    document.getElementById('btn-text').textContent  = on ? 'Verifying…' : 'Sign In';
+}
+
+// ── Page load: check existing session ─────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+    const session = await AUTH.validateSession();
+    if (session) { window.location.replace('dashboard.html'); return; }
+});
+
+// ── Form submit ───────────────────────────────────────────────
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideAlert();
+
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+
+    if (!username || !password) {
+        showAlert('Please enter your username and password.');
+        return;
+    }
+
+    // Check lockout first
+    const lo = AUTH.checkLockout(username);
+    if (lo.locked) {
+        startLockoutUI(lo.remainingSeconds * 1000);
+        showAlert('This account is temporarily locked.', 'warning');
+        
+        return;
+    }
+
+    setLoading(true);
+    const result = await AUTH.authenticateUser(username, password);
+    setLoading(false);
+
+    if (result.success) {
+        showAlert('Login successful. Redirecting…', 'success');
+    
+        setTimeout(() => window.location.href = 'dashboard.html', 800);
+        return;
+    }
+
+    if (result.locked) {
+        startLockoutUI(result.remainingSeconds * 1000);
+        showAlert('Too many failed attempts. Account locked for 30 seconds.', 'warning');
+        
+        return;
+    }
+
+    showAlert(result.error);
+});
+</script>
+</body>
+</html>

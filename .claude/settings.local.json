@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker version *)",
+      "Bash(docker compose *)",
+      "Bash(docker context *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\John Asley\\\\OneDrive\\\\Desktop\\\\PSA WORKS\" -Recurse -Directory)",
+      "PowerShell(ls -Recurse \"c:\\\\Users\\\\John Asley\\\\OneDrive\\\\Desktop\\\\PSA WORKS\\\\apps\" -Exclude node_modules | Where-Object {$_.Extension -in @\\('.ts', '.tsx', '.js', '.jsx'\\)} | Select-Object FullName)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173/psa_logo.png)",
+      "Bash(docker-compose ps *)",
+      "Bash(Start-Process \"C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe\")",
+      "PowerShell(Start-Process \"C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe\")",
+      "Bash(docker-compose up *)",
+      "Bash(curl -s \"http://localhost:3000/users/search?q=mi\" -H \"Cookie: auth_token=test\")",
+      "PowerShell(docker info 2>&1)",
+      "PowerShell(docker exec psaworks-postgres-1 psql -U psa -d psa_workflow -c \"UPDATE users SET status = 'active' WHERE LOWER\\(username\\) = 'psacl' RETURNING id, username, status;\")",
+      "PowerShell(Copy-Item -Path \"c:\\\\Users\\\\John Asley\\\\OneDrive\\\\Desktop\\\\PSA WORKS\\\\apps\\\\frontend\\\\src\\\\styles.css\" -Destination \"c:\\\\Users\\\\John Asley\\\\OneDrive\\\\Desktop\\\\PAYROLL PSA\\\\apps\\\\frontend\\\\src\\\\styles.css\" -Force)",
+      "Bash(docker info *)",
+      "Bash(powershell -command \"Get-Item 'c:\\\\Users\\\\John Asley\\\\OneDrive\\\\Desktop\\\\PAYROLL PSA\\\\apps\\\\frontend\\\\src\\\\psa-logo.png' | Select-Object Name, Length; Get-Item 'c:\\\\Users\\\\John Asley\\\\OneDrive\\\\Desktop\\\\PSA WORKS\\\\apps\\\\frontend\\\\src\\\\psa-logo.png' | Select-Object Name, Length\")",
+      "Bash(git -C \"c:\\\\Users\\\\John Asley\\\\OneDrive\\\\Desktop\\\\PSA WORKS\" remote -v)",
+      "Bash(git -C \"c:\\\\Users\\\\John Asley\\\\OneDrive\\\\Desktop\\\\PSA WORKS\" status --short)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\John Asley\\OneDrive\\Desktop\\PAYROLL PSA\\services\\worker",
+      "c:\\Users\\John Asley\\OneDrive\\Desktop\\PAYROLL PSA\\apps\\frontend",
+      "c:\\Users\\John Asley\\OneDrive\\Desktop\\PAYROLL PSA\\services\\api\\src"
+    ]
+  }
+}

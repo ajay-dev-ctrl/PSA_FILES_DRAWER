@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PSA — Register</title>
+    <meta name="description" content="Philippine Statistics Authority — Create Account">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 32px 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* ── PSA logo watermark ── */
+        .bg-watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 680px;
+            height: 680px;
+            background-image: url('psa_logo.png');
+            background-repeat: no-repeat;
+            background-size: contain;
+            background-position: center;
+            opacity: 0.045;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── Card ── */
+        .card {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 360px;
+            padding: 48px 40px 40px;
+        }
+
+        /* ── Header ── */
+        .header {
+            text-align: center;
+            margin-bottom: 36px;
+        }
+
+        .header-logo {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 20px;
+            background-image: url('psa_logo.png');
+            background-repeat: no-repeat;
+            background-size: contain;
+            background-position: center;
+        }
+
+        .header h1 {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: #111111;
+            letter-spacing: 0.01em;
+            margin-bottom: 4px;
+        }
+
+        .header p {
+            font-size: 0.78rem;
+            color: #888888;
+            font-weight: 400;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+
+        .header-divider {
+            width: 32px;
+            height: 2px;
+            background: #0038a8;
+            margin: 16px auto 0;
+            border-radius: 2px;
+        }
+
+        /* ── Form ── */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.72rem;
+            font-weight: 500;
+            color: #555555;
+            margin-bottom: 7px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .form-input {
+            width: 100%;
+            border: 1px solid #d8d8d8;
+            border-radius: 4px;
+            padding: 11px 14px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9rem;
+            color: #111111;
+            background: #ffffff;
+            transition: border-color 0.15s ease;
+            outline: none;
+        }
+
+        .form-input::placeholder {
+            color: #bbbbbb;
+            font-weight: 300;
+        }
+
+        .form-input:focus {
+            border-color: #0038a8;
+        }
+
+        .form-input:disabled {
+            background: #f5f5f5;
+            cursor: not-allowed;
+        }
+
+        /* ── Password strength ── */
+        .strength-bar-wrap {
+            display: flex;
+            gap: 3px;
+            margin-top: 8px;
+        }
+
+        .strength-seg {
+            flex: 1;
+            height: 2px;
+            background: #e8e8e8;
+            border-radius: 2px;
+            transition: background 0.25s;
+        }
+
+        .strength-seg.s1 { background: #c0392b; }
+        .strength-seg.s2 { background: #d97706; }
+        .strength-seg.s3 { background: #2563eb; }
+        .strength-seg.s4 { background: #16a34a; }
+
+        .strength-text {
+            font-size: 0.68rem;
+            color: #aaaaaa;
+            text-align: right;
+            margin-top: 5px;
+            height: 14px;
+            transition: color 0.2s;
+        }
+
+        /* ── Requirements ── */
+        .req-list {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+        .req-item {
+            font-size: 0.7rem;
+            color: #bbbbbb;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: color 0.2s;
+        }
+
+        .req-item::before {
+            content: '○';
+            font-size: 0.6rem;
+            flex-shrink: 0;
+        }
+
+        .req-item.met {
+            color: #16a34a;
+        }
+
+        .req-item.met::before {
+            content: '●';
+        }
+
+        /* ── Alert ── */
+        .alert {
+            display: none;
+            font-size: 0.78rem;
+            padding: 10px 12px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+        .alert.show   { display: block; }
+        .alert.error   { background: #fff2f2; border: 1px solid #f5c6c6; color: #c0392b; }
+        .alert.success { background: #f0fff4; border: 1px solid #b7dfb9; color: #1e7e34; }
+
+        /* ── Button ── */
+        .btn-submit {
+            width: 100%;
+            padding: 12px;
+            background: #0038a8;
+            color: #ffffff;
+            border: none;
+            border-radius: 4px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.88rem;
+            font-weight: 500;
+            cursor: pointer;
+            letter-spacing: 0.04em;
+            transition: background 0.15s ease;
+            margin-top: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn-submit:hover { background: #002d8a; }
+        .btn-submit:active { background: #00236d; }
+        .btn-submit:disabled { background: #a0b4d6; cursor: not-allowed; }
+
+        .spinner {
+            width: 14px; height: 14px;
+            border: 2px solid rgba(255,255,255,0.4);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            display: none;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Footer ── */
+        .footer-row {
+            text-align: center;
+            margin-top: 24px;
+            font-size: 0.78rem;
+            color: #888888;
+        }
+        .footer-row a {
+            color: #0038a8;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .footer-row a:hover { text-decoration: underline; }
+
+        .system-note {
+            text-align: center;
+            margin-top: 28px;
+            font-size: 0.68rem;
+            color: #cccccc;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+
+<div class="bg-watermark"></div>
+
+<div class="card">
+
+    <div class="header">
+        <div class="header-logo"></div>
+        <h1>Philippine Statistics Authority</h1>
+        <p>Create System Account</p>
+        <div class="header-divider"></div>
+    </div>
+
+    <div class="alert" id="alert-box" role="alert"></div>
+
+    <form id="register-form" novalidate>
+
+        <!-- Username -->
+        <div class="form-group">
+            <label class="form-label" for="reg-username">Username</label>
+            <input class="form-input" type="text" id="reg-username"
+                placeholder="Choose a username" autocomplete="username" required>
+        </div>
+
+        <!-- Password -->
+        <div class="form-group">
+            <label class="form-label" for="reg-password">Password</label>
+            <input class="form-input" type="password" id="reg-password"
+                placeholder="Create a password" autocomplete="new-password">
+
+            <div class="strength-bar-wrap">
+                <div class="strength-seg" id="seg1"></div>
+                <div class="strength-seg" id="seg2"></div>
+                <div class="strength-seg" id="seg3"></div>
+                <div class="strength-seg" id="seg4"></div>
+            </div>
+            <div class="strength-text" id="strength-text"></div>
+
+            <div class="req-list">
+                <div class="req-item" id="req-len">8+ characters</div>
+                <div class="req-item" id="req-upper">Uppercase letter</div>
+                <div class="req-item" id="req-num">Number</div>
+                <div class="req-item" id="req-sym">Symbol (!@#…)</div>
+            </div>
+        </div>
+
+        <!-- Confirm password -->
+        <div class="form-group">
+            <label class="form-label" for="reg-confirm">Confirm Password</label>
+            <input class="form-input" type="password" id="reg-confirm"
+                placeholder="Repeat password" autocomplete="new-password">
+        </div>
+
+        <button type="submit" class="btn-submit" id="btn-register">
+            <div class="spinner" id="spinner"></div>
+            <span id="btn-text">Create Account</span>
+        </button>
+
+    </form>
+
+    <div class="footer-row">
+        Already have an account? <a href="login.html">Sign in</a>
+    </div>
+
+    <div class="system-note">
+        Authorized personnel only.<br>
+        All registrations are subject to administrator review.
+    </div>
+
+</div>
+
+<script src="security.js"></script>
+<script>
+    const requirements = {
+        len:   { el: document.getElementById('req-len'),   test: p => p.length >= 8 },
+        upper: { el: document.getElementById('req-upper'), test: p => /[A-Z]/.test(p) },
+        num:   { el: document.getElementById('req-num'),   test: p => /[0-9]/.test(p) },
+        sym:   { el: document.getElementById('req-sym'),   test: p => /[^A-Za-z0-9]/.test(p) },
+    };
+
+    const strengthLabels = ['', 'Weak', 'Fair', 'Good', 'Strong'];
+    const strengthColors = ['', '#c0392b', '#d97706', '#2563eb', '#16a34a'];
+
+    document.getElementById('reg-password').addEventListener('input', function () {
+        const p = this.value;
+        let score = 0;
+        for (const [, r] of Object.entries(requirements)) {
+            const met = r.test(p);
+            r.el.classList.toggle('met', met);
+            if (met) score++;
+        }
+        for (let i = 1; i <= 4; i++) {
+            const seg = document.getElementById(`seg${i}`);
+            seg.className = 'strength-seg';
+            if (i <= score) seg.classList.add(`s${score}`);
+        }
+        const txt = document.getElementById('strength-text');
+        txt.textContent  = p.length ? strengthLabels[score] : '';
+        txt.style.color  = strengthColors[score];
+    });
+
+    function showAlert(msg, type = 'error') {
+        const box = document.getElementById('alert-box');
+        box.className = `alert show ${type}`;
+        box.textContent = msg;
+    }
+    function hideAlert() {
+        document.getElementById('alert-box').className = 'alert';
+    }
+
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        hideAlert();
+
+        const username = document.getElementById('reg-username').value.trim();
+        const password = document.getElementById('reg-password').value;
+        const confirm  = document.getElementById('reg-confirm').value;
+        const btn      = document.getElementById('btn-register');
+        const spinner  = document.getElementById('spinner');
+        const btnText  = document.getElementById('btn-text');
+
+        if (!username) { showAlert('Please enter a username.'); return; }
+        if (username.length < 3) { showAlert('Username must be at least 3 characters.'); return; }
+
+        for (const [key, r] of Object.entries(requirements)) {
+            if (!r.test(password)) {
+                showAlert('Password does not meet all requirements.');
+                return;
+            }
+        }
+
+        if (password !== confirm) { showAlert('Passwords do not match.'); return; }
+
+        btn.disabled = true;
+        spinner.style.display = 'block';
+        btnText.textContent = 'Creating…';
+
+        const result = await AUTH.registerUser(username, password);
+
+        if (result.success) {
+            showAlert('Account created. Redirecting to sign in…', 'success');
+            setTimeout(() => window.location.href = 'login.html', 1800);
+        } else {
+            showAlert(result.error || 'Registration failed.');
+            btn.disabled = false;
+            spinner.style.display = 'none';
+            btnText.textContent = 'Create Account';
+        }
+    });
+</script>
+</body>
+</html>
