@@ -994,15 +994,18 @@ button:disabled { cursor: wait; opacity: 0.6; }
   border: 1px solid #f5c6c0;
   font-size: 0.74rem;
   font-weight: 700;
-  cursor: default;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.1s, filter 0.1s;
 }
-.dash-complete-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.82rem;
-  font-weight: 600;
+.dash-missing-chip:hover {
+  filter: brightness(0.96);
+  transform: translateY(-1px);
+}
+.dash-missing-chip--done {
+  background: #e6f4ea;
   color: #2e7d46;
+  border: 1px solid #b7ddc2;
 }
 
 /* ═══════════════════════════════════════════════════════════════════

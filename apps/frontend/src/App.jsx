@@ -143,6 +143,7 @@ const UserCard = memo(function UserCard({
   memory,
   isOpen,
   uploadedFiles,
+  initialDocItem,
   onToggle,
   onEdit,
   onUpload,
@@ -151,6 +152,10 @@ const UserCard = memo(function UserCard({
   onDeleteUser,
 }) {
   const [selectedItem, setSelectedItem] = useState("");
+
+  useEffect(() => {
+    if (isOpen && initialDocItem) setSelectedItem(initialDocItem);
+  }, [isOpen, initialDocItem]);
 
   const selectedDoc  = REQUIREMENT_DOCUMENTS.find(d => d.item === selectedItem);
   const selectedSlot = selectedItem ? uploadedFiles[selectedItem] : null;
@@ -376,6 +381,7 @@ function adminBtn(color) {
 function App() {
   const [activePage,       setActivePage]       = useState("dashboard");
   const [openMemoryId,     setOpenMemoryId]      = useState("");
+  const [pendingDocItem,   setPendingDocItem]    = useState("");
   const [personName,       setPersonName]        = useState("");
   const [position,         setPosition]          = useState("");
   const [officeDivision,   setOfficeDivision]    = useState("");
@@ -530,6 +536,7 @@ function App() {
 
   // ── Stable card handlers ─────────────────────────────────────────────────────
   const handleToggle = useCallback((id) => {
+    setPendingDocItem("");
     setOpenMemoryId((prev) => {
       if (prev !== id) {
         // Record open as a search hit — O(log n) Redis sorted set increment
@@ -1093,9 +1100,10 @@ function App() {
 
           {activePage === "dashboard" ? (
             <Dashboard
-              onOpenInAddFiles={(id, name) => {
+              onOpenInAddFiles={(id, name, docItem) => {
                 setSearchTerm(name);
                 setOpenMemoryId(id);
+                setPendingDocItem(docItem ?? "");
                 setActivePage("find-user");
               }}
             />
@@ -1622,6 +1630,7 @@ function App() {
                         memory={memory}
                         isOpen={openMemoryId === memory.id}
                         uploadedFiles={openMemoryId === memory.id ? uploadedFiles : EMPTY_FILES}
+                        initialDocItem={openMemoryId === memory.id ? pendingDocItem : ""}
                         onToggle={handleToggle}
                         onEdit={handleEdit}
                         onUpload={uploadFile}

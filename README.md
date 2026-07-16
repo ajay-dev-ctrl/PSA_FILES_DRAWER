@@ -80,3 +80,9 @@ When this moves to Kubernetes:
 - Worker replicas can scale independently based on queue depth.
 
 See [docs/kubernetes-data-flow.md](docs/kubernetes-data-flow.md).
+
+
+admin 
+URL: http://localhost:5173/login.html
+Username: admin123
+Password: Aa1!p4yUJTYnkBd

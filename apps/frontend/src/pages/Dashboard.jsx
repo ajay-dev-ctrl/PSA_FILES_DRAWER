@@ -10,14 +10,24 @@ function progressBand(pct) {
   return "low";
 }
 
-function CompleteBadge() {
+function DocumentChips({ completedSet, onSelect }) {
   return (
-    <span className="dash-complete-badge">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2e7d46" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="20 6 9 17 4 12" />
-      </svg>
-      All complete
-    </span>
+    <>
+      {REQUIREMENT_DOCUMENTS.map((d) => {
+        const done = completedSet.has(d.item);
+        return (
+          <button
+            key={d.item}
+            type="button"
+            className={`dash-missing-chip${done ? " dash-missing-chip--done" : ""}`}
+            title={`${d.name} — click to open in Add Files`}
+            onClick={() => onSelect?.(d.item)}
+          >
+            {d.item}
+          </button>
+        );
+      })}
+    </>
   );
 }
 
@@ -141,7 +151,6 @@ export default function Dashboard({ onOpenInAddFiles }) {
           ) : (() => {
             const r = selectedEmployee;
             const isExpanded = expandedIds.has(r.id);
-            const missing = REQUIREMENT_DOCUMENTS.filter((d) => !r.completedSet.has(d.item));
             return (
               <article className="job-card">
                 <div className="job-card__header" style={{ flexWrap: "wrap", gap: "10px 18px" }}>
@@ -186,17 +195,12 @@ export default function Dashboard({ onOpenInAddFiles }) {
                       <span>{r.officeDivision}</span>
                     </div>
                     <div className="dash-card-detail-row">
-                      <span className="dash-card-detail-label">Missing Documents</span>
+                      <span className="dash-card-detail-label">Documents</span>
                       <span className="dash-missing-cell">
-                        {missing.length === 0 ? (
-                          <CompleteBadge />
-                        ) : (
-                          missing.map((d) => (
-                            <span key={d.item} className="dash-missing-chip" title={d.name}>
-                              {d.item}
-                            </span>
-                          ))
-                        )}
+                        <DocumentChips
+                          completedSet={r.completedSet}
+                          onSelect={(item) => onOpenInAddFiles?.(r.id, r.name, item)}
+                        />
                       </span>
                     </div>
                   </div>
@@ -222,12 +226,11 @@ export default function Dashboard({ onOpenInAddFiles }) {
                 <th>Employee</th>
                 <th>Office / Division</th>
                 <th>Progress</th>
-                <th>Missing Documents</th>
+                <th>Documents</th>
               </tr>
             </thead>
             <tbody>
               {filteredRows.map((r) => {
-                const missing = REQUIREMENT_DOCUMENTS.filter((d) => !r.completedSet.has(d.item));
                 return (
                   <tr key={r.id}>
                     <td>
@@ -243,15 +246,10 @@ export default function Dashboard({ onOpenInAddFiles }) {
                     <td>{r.officeDivision}</td>
                     <td>{r.completedCount}/{TOTAL_DOCS}</td>
                     <td className="dash-missing-cell">
-                      {missing.length === 0 ? (
-                        <CompleteBadge />
-                      ) : (
-                        missing.map((d) => (
-                          <span key={d.item} className="dash-missing-chip" title={d.name}>
-                            {d.item}
-                          </span>
-                        ))
-                      )}
+                      <DocumentChips
+                        completedSet={r.completedSet}
+                        onSelect={(item) => onOpenInAddFiles?.(r.id, r.name, item)}
+                      />
                     </td>
                   </tr>
                 );
