@@ -1009,6 +1009,32 @@ button:disabled { cursor: wait; opacity: 0.6; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════════════════════════════════ */
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, -8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+.toast-success {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 18px;
+  background: #166534;
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  animation: toast-in 0.18s ease-out;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    FILE UPLOAD STATES
    ═══════════════════════════════════════════════════════════════════ */
 

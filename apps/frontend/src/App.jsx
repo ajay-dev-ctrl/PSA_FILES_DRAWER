@@ -137,6 +137,42 @@ function CustomSelect({ value, onChange, options, placeholder, style, dropdownHe
   );
 }
 
+// ── ClearableInput — text input with an inline ✕ to wipe a mistyped value ─────
+// onEnter (optional): fires when the user presses Enter, e.g. to trigger Add.
+function ClearableInput({ id, value, onChange, placeholder, required, onEnter }) {
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onEnter ? (e) => { if (e.key === "Enter") { e.preventDefault(); onEnter(); } } : undefined}
+        placeholder={placeholder}
+        required={required}
+        style={{ paddingRight: value ? 34 : undefined }}
+      />
+      {value && (
+        <button
+          type="button"
+          title="Clear"
+          onClick={() => onChange("")}
+          style={{
+            position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)",
+            width: 22, height: 22, padding: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            borderRadius: "50%", border: "none", background: "transparent",
+            color: "#94a3b8", cursor: "pointer", fontSize: "1.1rem", lineHeight: 1,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = "#f1f5f9"; e.currentTarget.style.color = "#475569"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#94a3b8"; }}
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── UserCard — memoized so only re-renders when its own props change ──────────
 
 const UserCard = memo(function UserCard({
@@ -387,7 +423,7 @@ function App() {
   const [officeDivision,   setOfficeDivision]    = useState("");
   const [position2,        setPosition2]         = useState("");
   const [officeDivision2,  setOfficeDivision2]   = useState("");
-  const [secondAssignmentMsg, setSecondAssignmentMsg] = useState("");
+  const [toast,            setToast]             = useState("");
   const [searchTerm,       setSearchTerm]        = useState("");
   const [userMatches,      setUserMatches]       = useState([]);
   const [isSearching,      setIsSearching]       = useState(false);
@@ -428,30 +464,38 @@ function App() {
   const esRef        = useRef(null);
   const avatarInputRef = useRef(null);
 
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(""), 2500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   const normalizedSearch = searchTerm.trim().toLowerCase();
   const visibleUsers     = normalizedSearch ? userMatches : memories;
 
+  // Positions/offices saved as either a primary or a 2nd assignment all count
+  // as "saved" — a value typed in one slot should suggest in the other too.
+  // Also fold in whatever's currently typed: for a new (unsaved) employee,
+  // Add only stages position2/officeDivision2 locally until Save User runs,
+  // so without this the value wouldn't show up here until persisted.
   const savedPositions = useMemo(() => {
-    const vals = memories.map((m) => m.content?.position).filter(Boolean);
+    const vals = memories.flatMap((m) => [m.content?.position, m.content?.position2]).filter(Boolean);
+    if (position) vals.push(position);
+    if (position2) vals.push(position2);
     return [...new Set(vals)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
-  }, [memories]);
+  }, [memories, position, position2]);
 
   const savedOfficeDivisions = useMemo(() => {
     const vals = memories
-      .map((m) => m.content?.officeDivision || m.content?.source)
+      .flatMap((m) => [m.content?.officeDivision || m.content?.source, m.content?.officeDivision2])
       .filter(Boolean);
+    if (officeDivision) vals.push(officeDivision);
+    if (officeDivision2) vals.push(officeDivision2);
     return [...new Set(vals)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
-  }, [memories]);
+  }, [memories, officeDivision, officeDivision2]);
 
-  const savedPositions2 = useMemo(() => {
-    const vals = memories.map((m) => m.content?.position2).filter(Boolean);
-    return [...new Set(vals)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
-  }, [memories]);
-
-  const savedOfficeDivisions2 = useMemo(() => {
-    const vals = memories.map((m) => m.content?.officeDivision2).filter(Boolean);
-    return [...new Set(vals)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
-  }, [memories]);
+  const savedPositions2 = savedPositions;
+  const savedOfficeDivisions2 = savedOfficeDivisions;
 
   // ── Auth check on mount — redirect to login if not authenticated ──────────────
   useEffect(() => {
@@ -841,11 +885,17 @@ function App() {
   }
 
   async function saveSecondAssignment() {
-    if (!editingMemoryId) {
-      setError("Save the employee first (Save User above), then you can add an additional assignment.");
+    if (!position2.trim() && !officeDivision2.trim()) {
+      setError("Enter a position or office/division to add.");
       return;
     }
     setError("");
+    if (!editingMemoryId) {
+      // New employee: nothing to persist yet — position2/officeDivision2 are
+      // already tracked in state and go out together with Save User.
+      setToast("Added — will save together with this employee.");
+      return;
+    }
     try {
       const res = await fetch(`${apiUrl}/memories/${editingMemoryId}`, {
         method: "PATCH",
@@ -858,13 +908,33 @@ function App() {
         throw new Error(body.error ?? "Could not save additional assignment.");
       }
       await refreshData();
+      setToast("Position/Division added.");
     } catch (err) {
       setError(err.message);
     }
   }
 
-  async function clearSecondAssignment() {
+  async function clearPosition2() {
     setPosition2("");
+    if (!editingMemoryId) return;
+    try {
+      const res = await fetch(`${apiUrl}/memories/${editingMemoryId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ updates: { position2: "" } }),
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.error ?? "Could not clear position.");
+      }
+      await refreshData();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function clearOfficeDivision2() {
     setOfficeDivision2("");
     if (!editingMemoryId) return;
     try {
@@ -872,11 +942,11 @@ function App() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ updates: { position2: "", officeDivision2: "" } }),
+        body: JSON.stringify({ updates: { officeDivision2: "" } }),
       });
       if (!res.ok) {
         const body = await res.json();
-        throw new Error(body.error ?? "Could not remove additional assignment.");
+        throw new Error(body.error ?? "Could not clear office/division.");
       }
       await refreshData();
     } catch (err) {
@@ -914,6 +984,15 @@ function App() {
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <main className="app-shell">
+
+      {toast && (
+        <div className="toast-success" role="status">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          {toast}
+        </div>
+      )}
 
       {/* ════════════ SIDEBAR ════════════ */}
       <aside className={`nav-sidebar${sidebarOpen ? "" : " nav-sidebar--collapsed"}`} aria-label="Application navigation">
@@ -1428,10 +1507,10 @@ function App() {
                   <div className="field-group">
                     <label>
                       Assign Position / New Position
-                      <input
+                      <ClearableInput
                         id="input-position"
                         value={position}
-                        onChange={(e) => setPosition(e.target.value)}
+                        onChange={setPosition}
                         placeholder="e.g. Administrative Officer IV"
                         required
                       />
@@ -1451,10 +1530,10 @@ function App() {
                   <div className="field-group">
                     <label>
                       Office / Division
-                      <input
+                      <ClearableInput
                         id="input-office"
                         value={officeDivision}
-                        onChange={(e) => setOfficeDivision(e.target.value)}
+                        onChange={setOfficeDivision}
                         placeholder="e.g. RSSO II / CRASD"
                       />
                     </label>
@@ -1498,44 +1577,86 @@ function App() {
                   <div className="field-group">
                     <label>
                       Assign Position / New Position
-                      <input
+                      <ClearableInput
                         id="input-position-2"
                         value={position2}
-                        onChange={(e) => setPosition2(e.target.value)}
+                        onChange={setPosition2}
                         placeholder="e.g. Administrative Officer IV"
+                        onEnter={saveSecondAssignment}
                       />
                     </label>
                     <label>
                       Saved Positions
-                      <CustomSelect
-                        id="select-position-2"
-                        value=""
-                        onChange={val => setPosition2(val)}
-                        placeholder="Select saved…"
-                        options={savedPositions2.map(p => ({ value: p, label: p }))}
-                      />
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <CustomSelect
+                            id="select-position-2"
+                            value=""
+                            onChange={val => setPosition2(val)}
+                            placeholder="Select saved…"
+                            options={savedPositions2.map(p => ({ value: p, label: p }))}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          title="Clear position"
+                          onClick={clearPosition2}
+                          style={{
+                            width: 36, height: 36, padding: 0,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            borderRadius: "var(--radius-sm)", background: "#fee2e2", color: "#991b1b",
+                            border: "1.5px solid #fecaca", cursor: "pointer", flexShrink: 0,
+                          }}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        </button>
+                      </div>
                     </label>
                   </div>
 
                   <div className="field-group">
                     <label>
                       Office / Division
-                      <input
+                      <ClearableInput
                         id="input-office-2"
                         value={officeDivision2}
-                        onChange={(e) => setOfficeDivision2(e.target.value)}
+                        onChange={setOfficeDivision2}
                         placeholder="e.g. RSSO II / CRASD"
+                        onEnter={saveSecondAssignment}
                       />
                     </label>
                     <label>
                       Saved Offices
-                      <CustomSelect
-                        id="select-office-2"
-                        value=""
-                        onChange={val => setOfficeDivision2(val)}
-                        placeholder="Select saved…"
-                        options={savedOfficeDivisions2.map(o => ({ value: o, label: o }))}
-                      />
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <CustomSelect
+                            id="select-office-2"
+                            value=""
+                            onChange={val => setOfficeDivision2(val)}
+                            placeholder="Select saved…"
+                            options={savedOfficeDivisions2.map(o => ({ value: o, label: o }))}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          title="Clear office/division"
+                          onClick={clearOfficeDivision2}
+                          style={{
+                            width: 36, height: 36, padding: 0,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            borderRadius: "var(--radius-sm)", background: "#fee2e2", color: "#991b1b",
+                            border: "1.5px solid #fecaca", cursor: "pointer", flexShrink: 0,
+                          }}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        </button>
+                      </div>
                     </label>
                   </div>
                 </div>
@@ -1544,27 +1665,6 @@ function App() {
                   <button type="button" className="ghost-button" onClick={saveSecondAssignment}>
                     Add
                   </button>
-                  <button
-                    type="button"
-                    title="Remove this additional assignment"
-                    onClick={clearSecondAssignment}
-                    style={{
-                      width: 36, height: 36, padding: 0,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      borderRadius: "var(--radius-sm)", background: "#fee2e2", color: "#991b1b",
-                      border: "1.5px solid #fecaca", cursor: "pointer", flexShrink: 0,
-                    }}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                  </button>
-                  {!editingMemoryId && (
-                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                      New employee: this saves together with Save User above. Editing an existing employee: use Add/✕ here directly.
-                    </span>
-                  )}
                 </div>
               </section>
             </>
