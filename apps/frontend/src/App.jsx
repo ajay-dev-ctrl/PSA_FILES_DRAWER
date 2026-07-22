@@ -139,7 +139,7 @@ function CustomSelect({ value, onChange, options, placeholder, style, dropdownHe
 
 // ── ClearableInput — text input with an inline ✕ to wipe a mistyped value ─────
 // onEnter (optional): fires when the user presses Enter, e.g. to trigger Add.
-function ClearableInput({ id, value, onChange, placeholder, required, onEnter }) {
+function ClearableInput({ id, value, onChange, placeholder, required, onEnter, onClear }) {
   return (
     <div style={{ position: "relative" }}>
       <input
@@ -154,19 +154,28 @@ function ClearableInput({ id, value, onChange, placeholder, required, onEnter })
       {value && (
         <button
           type="button"
-          title="Clear"
-          onClick={() => onChange("")}
+          title={onClear ? "Delete saved value" : "Clear"}
+          aria-label={onClear ? "Delete saved value" : "Clear"}
+          onClick={onClear ?? (() => onChange(""))}
           style={{
             position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)",
             width: 22, height: 22, padding: 0,
             display: "flex", alignItems: "center", justifyContent: "center",
             borderRadius: "50%", border: "none", background: "transparent",
-            color: "#94a3b8", cursor: "pointer", fontSize: "1.1rem", lineHeight: 1,
+            color: onClear ? "#991b1b" : "#94a3b8", cursor: "pointer", fontSize: "1.1rem", lineHeight: 1,
           }}
-          onMouseEnter={e => { e.currentTarget.style.background = "#f1f5f9"; e.currentTarget.style.color = "#475569"; }}
-          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#94a3b8"; }}
+          onMouseEnter={e => { e.currentTarget.style.background = onClear ? "#fee2e2" : "#f1f5f9"; e.currentTarget.style.color = onClear ? "#991b1b" : "#475569"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = onClear ? "#991b1b" : "#94a3b8"; }}
         >
-          ×
+          {onClear ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+              <path d="M10 11v6"/>
+              <path d="M14 11v6"/>
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+            </svg>
+          ) : "×"}
         </button>
       )}
     </div>
@@ -233,6 +242,7 @@ const UserCard = memo(function UserCard({
           <button
             type="button"
             title="Delete employee"
+            aria-label="Delete employee"
             onClick={(e) => { e.stopPropagation(); onDeleteUser(memory); }}
             style={{
               width: 36, height: 36, padding: 0,
@@ -332,6 +342,7 @@ const UserCard = memo(function UserCard({
                     <button
                       type="button"
                       title={`View ${f.filename}`}
+                      aria-label={`View ${f.filename}`}
                       onClick={() => viewFile(memory.id, selectedItem)}
                       style={{
                         width: 32, height: 32, minWidth: 32, padding: 0,
@@ -352,6 +363,7 @@ const UserCard = memo(function UserCard({
                       type="button"
                       className="dl-btn"
                       title={`Download ${f.filename}`}
+                      aria-label={`Download ${f.filename}`}
                       onClick={() => onDownload(memory.id, selectedItem, f.id, f.filename)}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -361,6 +373,7 @@ const UserCard = memo(function UserCard({
                     <button
                       type="button"
                       title="Delete this file"
+                      aria-label={`Delete ${f.filename}`}
                       onClick={() => onDelete(memory.id, selectedItem, f.id, f.filename)}
                       style={{
                         width: 32, height: 32, minWidth: 32, padding: 0,
@@ -430,6 +443,7 @@ function App() {
   const [dropdownOpen,     setDropdownOpen]      = useState(false);
   const [topUsers,         setTopUsers]          = useState([]);
   const [positions,        setPositions]         = useState([]);
+  const [savedOptions,     setSavedOptions]      = useState({ positions: [], officeDivisions: [], hiddenPositions: [], hiddenOfficeDivisions: [] });
   const [memories,         setMemories]          = useState([]);
   const [nextCursor,       setNextCursor]        = useState(null);
   const [isLoadingMore,    setIsLoadingMore]     = useState(false);
@@ -479,20 +493,26 @@ function App() {
   // Add only stages position2/officeDivision2 locally until Save User runs,
   // so without this the value wouldn't show up here until persisted.
   const savedPositions = useMemo(() => {
-    const vals = memories.flatMap((m) => [m.content?.position, m.content?.position2]).filter(Boolean);
+    const hidden = new Set((savedOptions.hiddenPositions ?? []).map((v) => v.toLowerCase()));
+    const vals = [
+      ...savedOptions.positions,
+      ...memories.flatMap((m) => [m.content?.position, m.content?.position2]),
+    ].filter(Boolean).filter((v) => !hidden.has(v.toLowerCase()));
     if (position) vals.push(position);
     if (position2) vals.push(position2);
     return [...new Set(vals)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
-  }, [memories, position, position2]);
+  }, [savedOptions.positions, savedOptions.hiddenPositions, memories, position, position2]);
 
   const savedOfficeDivisions = useMemo(() => {
-    const vals = memories
-      .flatMap((m) => [m.content?.officeDivision || m.content?.source, m.content?.officeDivision2])
-      .filter(Boolean);
+    const hidden = new Set((savedOptions.hiddenOfficeDivisions ?? []).map((v) => v.toLowerCase()));
+    const vals = [
+      ...savedOptions.officeDivisions,
+      ...memories.flatMap((m) => [m.content?.officeDivision || m.content?.source, m.content?.officeDivision2]),
+    ].filter(Boolean).filter((v) => !hidden.has(v.toLowerCase()));
     if (officeDivision) vals.push(officeDivision);
     if (officeDivision2) vals.push(officeDivision2);
     return [...new Set(vals)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
-  }, [memories, officeDivision, officeDivision2]);
+  }, [savedOptions.officeDivisions, savedOptions.hiddenOfficeDivisions, memories, officeDivision, officeDivision2]);
 
   const savedPositions2 = savedPositions;
   const savedOfficeDivisions2 = savedOfficeDivisions;
@@ -530,18 +550,21 @@ function App() {
     const params = new URLSearchParams({ limit: "50" });
     if (cursor) params.set("cursor", cursor);
 
-    const [resJobs, resMem] = await Promise.all([
+    const [resJobs, resMem, resOptions] = await Promise.all([
       fetch(`${apiUrl}/jobs`, { credentials: "include" }),
       fetch(`${apiUrl}/memories?${params}`, { credentials: "include" }),
+      fetch(`${apiUrl}/options`, { credentials: "include" }),
     ]);
-    if (!resJobs.ok || !resMem.ok) throw new Error("Could not load saved data.");
+    if (!resJobs.ok || !resMem.ok || !resOptions.ok) throw new Error("Could not load saved data.");
 
-    const jobsData = await resJobs.json();
-    const memData  = await resMem.json();  // { items, nextCursor }
+    const jobsData    = await resJobs.json();
+    const memData      = await resMem.json();  // { items, nextCursor }
+    const optionsData = await resOptions.json();
 
     setPositions(jobsData);
     setMemories((prev) => append ? [...prev, ...memData.items] : memData.items);
     setNextCursor(memData.nextCursor);
+    setSavedOptions(optionsData);
   }, []);
 
   // ── SSE replaces polling ─────────────────────────────────────────────────────
@@ -885,48 +908,89 @@ function App() {
   }
 
   async function saveSecondAssignment() {
-    if (!position2.trim() && !officeDivision2.trim()) {
+    const trimmedPosition = position2.trim();
+    const trimmedOffice   = officeDivision2.trim();
+    if (!trimmedPosition && !trimmedOffice) {
       setError("Enter a position or office/division to add.");
       return;
     }
     setError("");
-    if (!editingMemoryId) {
-      // New employee: nothing to persist yet — position2/officeDivision2 are
-      // already tracked in state and go out together with Save User.
-      setToast("Added — will save together with this employee.");
-      return;
-    }
     try {
-      const res = await fetch(`${apiUrl}/memories/${editingMemoryId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ updates: { position2, officeDivision2 } }),
-      });
-      if (!res.ok) {
-        const body = await res.json();
-        throw new Error(body.error ?? "Could not save additional assignment.");
+      // Persist to the standalone catalog first — this works with or without
+      // an employee being added/edited, so it never depends on one existing.
+      const optionRequests = [];
+      if (trimmedPosition) {
+        optionRequests.push(fetch(`${apiUrl}/options`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ type: "position", value: trimmedPosition }),
+        }));
       }
+      if (trimmedOffice) {
+        optionRequests.push(fetch(`${apiUrl}/options`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ type: "office_division", value: trimmedOffice }),
+        }));
+      }
+      for (const res of await Promise.all(optionRequests)) {
+        if (!res.ok) {
+          const body = await res.json();
+          throw new Error(body.error ?? "Could not save to list.");
+        }
+      }
+
+      if (editingMemoryId) {
+        const res = await fetch(`${apiUrl}/memories/${editingMemoryId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ updates: { position2, officeDivision2 } }),
+        });
+        if (!res.ok) {
+          const body = await res.json();
+          throw new Error(body.error ?? "Could not save additional assignment.");
+        }
+      }
+
       await refreshData();
-      setToast("Position/Division added.");
+      setToast(editingMemoryId ? "Position/Division added." : "Saved to list.");
     } catch (err) {
       setError(err.message);
     }
   }
 
+  // Deletes the currently loaded value from the saved catalog permanently
+  // (not just clearing the input) — matches the delete-styled X icon.
   async function clearPosition2() {
+    const valueToDelete = position2.trim();
     setPosition2("");
-    if (!editingMemoryId) return;
     try {
-      const res = await fetch(`${apiUrl}/memories/${editingMemoryId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ updates: { position2: "" } }),
-      });
-      if (!res.ok) {
-        const body = await res.json();
-        throw new Error(body.error ?? "Could not clear position.");
+      if (valueToDelete) {
+        const res = await fetch(`${apiUrl}/options`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ type: "position", value: valueToDelete }),
+        });
+        if (!res.ok) {
+          const body = await res.json();
+          throw new Error(body.error ?? "Could not delete saved position.");
+        }
+      }
+      if (editingMemoryId) {
+        const res = await fetch(`${apiUrl}/memories/${editingMemoryId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ updates: { position2: "" } }),
+        });
+        if (!res.ok) {
+          const body = await res.json();
+          throw new Error(body.error ?? "Could not clear position.");
+        }
       }
       await refreshData();
     } catch (err) {
@@ -935,18 +999,32 @@ function App() {
   }
 
   async function clearOfficeDivision2() {
+    const valueToDelete = officeDivision2.trim();
     setOfficeDivision2("");
-    if (!editingMemoryId) return;
     try {
-      const res = await fetch(`${apiUrl}/memories/${editingMemoryId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ updates: { officeDivision2: "" } }),
-      });
-      if (!res.ok) {
-        const body = await res.json();
-        throw new Error(body.error ?? "Could not clear office/division.");
+      if (valueToDelete) {
+        const res = await fetch(`${apiUrl}/options`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ type: "office_division", value: valueToDelete }),
+        });
+        if (!res.ok) {
+          const body = await res.json();
+          throw new Error(body.error ?? "Could not delete saved office/division.");
+        }
+      }
+      if (editingMemoryId) {
+        const res = await fetch(`${apiUrl}/memories/${editingMemoryId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ updates: { officeDivision2: "" } }),
+        });
+        if (!res.ok) {
+          const body = await res.json();
+          throw new Error(body.error ?? "Could not clear office/division.");
+        }
       }
       await refreshData();
     } catch (err) {
@@ -1094,6 +1172,7 @@ function App() {
               type="button"
               onClick={() => setSidebarOpen(v => !v)}
               title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+              aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
               style={{
                 background: "transparent", border: "none", padding: "6px 8px",
                 color: "var(--text-muted)", cursor: "pointer", borderRadius: "var(--radius-sm)",
@@ -1132,8 +1211,10 @@ function App() {
                 e.target.value = "";
               }}
             />
-            <div
+            <button
+              type="button"
               title="Change profile picture"
+              aria-label="Change profile picture"
               onClick={() => setActivePage("profile")}
               style={{
                 width: 36, height: 36, borderRadius: "50%",
@@ -1159,7 +1240,7 @@ function App() {
                   {currentUser?.[0]?.toUpperCase() ?? "?"}
                 </span>
               )}
-            </div>
+            </button>
             {currentUser && (
               <span style={{ fontSize: "0.78rem", color: "#888" }}>{currentUser}</span>
             )}
@@ -1202,10 +1283,12 @@ function App() {
                   </h3>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-                  <div
-                    style={{ position: "relative", width: 80, height: 80, flexShrink: 0, cursor: "pointer" }}
+                  <button
+                    type="button"
+                    style={{ position: "relative", width: 80, height: 80, flexShrink: 0, cursor: "pointer", padding: 0, border: 0, background: "transparent" }}
                     onClick={() => avatarInputRef.current?.click()}
                     title="Click to change photo"
+                    aria-label="Click to change photo"
                   >
                     <div style={{
                       width: 80, height: 80, borderRadius: "50%",
@@ -1239,7 +1322,7 @@ function App() {
                         <path d="M12 15.2A3.2 3.2 0 1 1 12 8.8a3.2 3.2 0 0 1 0 6.4zM9 3L7.17 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.17L15 3H9zm3 14a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/>
                       </svg>
                     </div>
-                  </div>
+                  </button>
                   <div>
                     <button
                       type="button"
@@ -1421,6 +1504,7 @@ function App() {
                                 <button
                                   type="button"
                                   title="Block user"
+                                  aria-label={`Block ${u.username}`}
                                   onClick={() => { if (window.confirm(`Block "${u.username}"?\n\nThis will prevent them from logging in.`)) handleBlock(u.id); }}
                                   style={{ ...adminBtn("red"), width: 36, height: 36, padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
                                   onMouseEnter={e => e.currentTarget.style.opacity = "0.82"}
@@ -1436,6 +1520,7 @@ function App() {
                                 <button
                                   type="button"
                                   title="Unblock user"
+                                  aria-label={`Unblock ${u.username}`}
                                   onClick={() => handleUnblock(u.id)}
                                   style={{ ...adminBtn("green"), width: 36, height: 36, padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
                                   onMouseEnter={e => e.currentTarget.style.opacity = "0.82"}
@@ -1450,6 +1535,7 @@ function App() {
                               <button
                                 type="button"
                                 title="Delete account"
+                                aria-label={`Delete account for ${u.username}`}
                                 onClick={() => handleDeleteSystemUser(u.id, u.username)}
                                 style={{ width: 36, height: 36, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-sm)", background: "#fee2e2", color: "#991b1b", border: "1.5px solid #fecaca", cursor: "pointer", transition: "background 0.12s", flexShrink: 0 }}
                                 onMouseEnter={e => e.currentTarget.style.background = "#fecaca"}
@@ -1583,6 +1669,7 @@ function App() {
                         onChange={setPosition2}
                         placeholder="e.g. Administrative Officer IV"
                         onEnter={saveSecondAssignment}
+                        onClear={clearPosition2}
                       />
                     </label>
                     <label>
@@ -1599,7 +1686,8 @@ function App() {
                         </div>
                         <button
                           type="button"
-                          title="Clear position"
+                          title="Delete saved position"
+                          aria-label="Delete saved position"
                           onClick={clearPosition2}
                           style={{
                             width: 36, height: 36, padding: 0,
@@ -1626,6 +1714,7 @@ function App() {
                         onChange={setOfficeDivision2}
                         placeholder="e.g. RSSO II / CRASD"
                         onEnter={saveSecondAssignment}
+                        onClear={clearOfficeDivision2}
                       />
                     </label>
                     <label>
@@ -1642,7 +1731,8 @@ function App() {
                         </div>
                         <button
                           type="button"
-                          title="Clear office/division"
+                          title="Delete saved office/division"
+                          aria-label="Delete saved office/division"
                           onClick={clearOfficeDivision2}
                           style={{
                             width: 36, height: 36, padding: 0,

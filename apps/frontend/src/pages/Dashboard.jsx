@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { REQUIREMENT_DOCUMENTS } from "../constants.js";
 
 const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
@@ -37,7 +37,6 @@ export default function Dashboard({ onOpenInAddFiles }) {
   const [error, setError] = useState(null);
   const [officeFilter, setOfficeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [employeeFilter, setEmployeeFilter] = useState("");
   const [expandedIds, setExpandedIds] = useState(() => new Set());
 
   function toggleExpanded(id) {
@@ -80,27 +79,12 @@ export default function Dashboard({ onOpenInAddFiles }) {
     return Array.from(set).sort();
   }, [rows]);
 
-  // Table shows everyone matching office/status — employee selection doesn't narrow it.
   const filteredRows = rows.filter((r) => {
     if (officeFilter && r.officeDivision !== officeFilter) return false;
     if (statusFilter === "complete" && r.pct < 100) return false;
     if (statusFilter === "incomplete" && r.pct >= 100) return false;
     return true;
   });
-
-  const employeeOptions = useMemo(() => {
-    return [...filteredRows].sort((a, b) => a.name.localeCompare(b.name));
-  }, [filteredRows]);
-
-  // Keep the picker pointed at someone valid as data/filters change.
-  useEffect(() => {
-    if (employeeOptions.length === 0) { setEmployeeFilter(""); return; }
-    if (!employeeOptions.some((r) => r.id === employeeFilter)) {
-      setEmployeeFilter(employeeOptions[0].id);
-    }
-  }, [employeeOptions, employeeFilter]);
-
-  const selectedEmployee = employeeOptions.find((r) => r.id === employeeFilter) ?? null;
 
   return (
     <>
@@ -109,7 +93,7 @@ export default function Dashboard({ onOpenInAddFiles }) {
         <div className="page-header-sub">Document completion overview per employee</div>
       </div>
 
-      {/* ── Filters + Employee Overview, combined into one panel ── */}
+      {/* ── Filters ── */}
       <section className="panel" id="dashboard-filters">
         <div className="section-heading">
           <h3 className="panel-title">
@@ -133,81 +117,6 @@ export default function Dashboard({ onOpenInAddFiles }) {
               <option value="incomplete">Incomplete</option>
             </select>
           </label>
-          <label>
-            Employee
-            <select value={employeeFilter} onChange={(e) => setEmployeeFilter(e.target.value)}>
-              {employeeOptions.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-            </select>
-          </label>
-        </div>
-
-        <div className="data-column" style={{ marginTop: 16 }}>
-          {loading ? (
-            <div className="empty">Loading…</div>
-          ) : error ? (
-            <div className="empty">{error}</div>
-          ) : !selectedEmployee ? (
-            <div className="empty">No employees match the current filters.</div>
-          ) : (() => {
-            const r = selectedEmployee;
-            const isExpanded = expandedIds.has(r.id);
-            return (
-              <article className="job-card">
-                <div className="job-card__header" style={{ flexWrap: "wrap", gap: "10px 18px" }}>
-                  <div className="job-card__info">
-                    <button
-                      type="button"
-                      className="job-card__name dash-name-link"
-                      title="Open in Add Files to attach documents"
-                      onClick={() => onOpenInAddFiles?.(r.id, r.name)}
-                    >
-                      {r.name}
-                    </button>
-                    <div className="job-card__tags">
-                      <span className="job-card__tag">{r.position}</span>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div className="dash-summary-count">{r.completedCount}/{TOTAL_DOCS} documents</div>
-                    <button
-                      type="button"
-                      className={`dash-expand-toggle${isExpanded ? " dash-expand-toggle--open" : ""}`}
-                      aria-expanded={isExpanded}
-                      title={isExpanded ? "Hide details" : "Show details"}
-                      onClick={() => toggleExpanded(r.id)}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 16 16">
-                        <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                <div className="dash-progress-track">
-                  <div
-                    className={`dash-progress-fill dash-progress-fill--${progressBand(r.pct)}`}
-                    style={{ width: `${r.pct}%` }}
-                  />
-                </div>
-                {isExpanded && (
-                  <div className="dash-card-details">
-                    <div className="dash-card-detail-row">
-                      <span className="dash-card-detail-label">Office / Division</span>
-                      <span>{r.officeDivision}</span>
-                    </div>
-                    <div className="dash-card-detail-row">
-                      <span className="dash-card-detail-label">Documents</span>
-                      <span className="dash-missing-cell">
-                        <DocumentChips
-                          completedSet={r.completedSet}
-                          onSelect={(item) => onOpenInAddFiles?.(r.id, r.name, item)}
-                        />
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </article>
-            );
-          })()}
         </div>
       </section>
 
@@ -219,44 +128,92 @@ export default function Dashboard({ onOpenInAddFiles }) {
             Document Status
           </h3>
         </div>
-        <div className="dash-table-wrap">
-          <table className="dash-table">
-            <thead>
-              <tr>
-                <th>Employee</th>
-                <th>Office / Division</th>
-                <th>Progress</th>
-                <th>Documents</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((r) => {
-                return (
-                  <tr key={r.id}>
-                    <td>
-                      <button
-                        type="button"
-                        className="dash-name-link"
-                        title="Open in Add Files to attach documents"
-                        onClick={() => onOpenInAddFiles?.(r.id, r.name)}
-                      >
-                        {r.name}
-                      </button>
-                    </td>
-                    <td>{r.officeDivision}</td>
-                    <td>{r.completedCount}/{TOTAL_DOCS}</td>
-                    <td className="dash-missing-cell">
-                      <DocumentChips
-                        completedSet={r.completedSet}
-                        onSelect={(item) => onOpenInAddFiles?.(r.id, r.name, item)}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        {loading ? (
+          <div className="empty">Loading…</div>
+        ) : error ? (
+          <div className="empty">{error}</div>
+        ) : filteredRows.length === 0 ? (
+          <div className="empty">No employees match the current filters.</div>
+        ) : (
+          <div className="dash-table-wrap">
+            <table className="dash-table">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Position</th>
+                  <th>Office / Division</th>
+                  <th>Progress</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.map((r) => {
+                  const isExpanded = expandedIds.has(r.id);
+                  return (
+                    <Fragment key={r.id}>
+                      <tr>
+                        <td>
+                          <button
+                            type="button"
+                            className="dash-name-link"
+                            title="Open in Add Files to attach documents"
+                            onClick={() => onOpenInAddFiles?.(r.id, r.name)}
+                          >
+                            {r.name}
+                          </button>
+                        </td>
+                        <td>{r.position}</td>
+                        <td>{r.officeDivision}</td>
+                        <td>
+                          <div className="dash-table-progress">
+                            <div className="dash-table-progress-track">
+                              <div
+                                className={`dash-progress-fill dash-progress-fill--${progressBand(r.pct)}`}
+                                style={{ width: `${r.pct}%` }}
+                              />
+                            </div>
+                            <span className="dash-table-progress-count">{r.completedCount}/{TOTAL_DOCS}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className={`dash-expand-toggle${isExpanded ? " dash-expand-toggle--open" : ""}`}
+                            aria-expanded={isExpanded}
+                            aria-label={isExpanded ? "Hide documents" : "Show documents"}
+                            title={isExpanded ? "Hide documents" : "Show documents"}
+                            onClick={() => toggleExpanded(r.id)}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 16 16">
+                              <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr className="dash-table-detail-row">
+                          <td colSpan={5}>
+                            <div className="dash-card-details">
+                              <div className="dash-card-detail-row">
+                                <span className="dash-card-detail-label">Documents</span>
+                                <span className="dash-missing-cell">
+                                  <DocumentChips
+                                    completedSet={r.completedSet}
+                                    onSelect={(item) => onOpenInAddFiles?.(r.id, r.name, item)}
+                                  />
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </>
   );

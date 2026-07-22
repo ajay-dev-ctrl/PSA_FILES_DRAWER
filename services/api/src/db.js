@@ -137,6 +137,36 @@ export async function ensureSchema() {
 
   // Clean up orphaned position rows left by the old SET NULL delete behavior
   await pool.query("DELETE FROM positions WHERE memory_id IS NULL");
+
+  // Standalone catalog of position/office-division values — lets these be
+  // added and reused from dropdowns without requiring an employee record.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS saved_options (
+      id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      type       TEXT NOT NULL CHECK (type IN ('position', 'office_division')),
+      value      TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_saved_options_type_value ON saved_options (type, LOWER(value))"
+  );
+
+  // Values explicitly deleted from the suggestion list. A position/office
+  // can still live on an employee's own record (e.g. typed on the main
+  // Add New User form) — that alone would otherwise keep resurrecting it
+  // in the "Saved" dropdowns even after deleting it from saved_options.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS hidden_saved_options (
+      id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      type       TEXT NOT NULL CHECK (type IN ('position', 'office_division')),
+      value      TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_hidden_saved_options_type_value ON hidden_saved_options (type, LOWER(value))"
+  );
 }
 
 export async function createJob(payload) {
@@ -550,6 +580,80 @@ export async function deleteSystemUser(userId) {
  * One row per employee with the set of doc_items they have an uploaded file for.
  * Used by the Dashboard page to compute per-employee completion.
  */
+/**
+ * Standalone position / office-division values, independent of any
+ * employee record — lets these be added and reused before anyone exists.
+ */
+export async function listSavedOptions() {
+  const [optionsResult, hiddenResult] = await Promise.all([
+    pool.query("SELECT type, value FROM saved_options ORDER BY value ASC"),
+    pool.query("SELECT type, value FROM hidden_saved_options ORDER BY value ASC"),
+  ]);
+  const positions = [];
+  const officeDivisions = [];
+  for (const row of optionsResult.rows) {
+    if (row.type === "position") positions.push(row.value);
+    else officeDivisions.push(row.value);
+  }
+  const hiddenPositions = [];
+  const hiddenOfficeDivisions = [];
+  for (const row of hiddenResult.rows) {
+    if (row.type === "position") hiddenPositions.push(row.value);
+    else hiddenOfficeDivisions.push(row.value);
+  }
+  return { positions, officeDivisions, hiddenPositions, hiddenOfficeDivisions };
+}
+
+export async function addSavedOption(type, value) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Re-adding a value un-hides it, so it can be suggested again.
+    await client.query(
+      "DELETE FROM hidden_saved_options WHERE type = $1 AND LOWER(value) = LOWER($2)",
+      [type, value]
+    );
+    const result = await client.query(
+      `INSERT INTO saved_options (type, value) VALUES ($1, $2)
+       ON CONFLICT (type, LOWER(value)) DO NOTHING
+       RETURNING *`,
+      [type, value]
+    );
+    await client.query("COMMIT");
+    return result.rows[0] ?? null;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function deleteSavedOption(type, value) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(
+      "DELETE FROM saved_options WHERE type = $1 AND LOWER(value) = LOWER($2) RETURNING *",
+      [type, value]
+    );
+    // Hide it too, so it stops resurfacing even if it still lives on
+    // an employee record (e.g. typed directly on the Add New User form).
+    await client.query(
+      `INSERT INTO hidden_saved_options (type, value) VALUES ($1, $2)
+       ON CONFLICT (type, LOWER(value)) DO NOTHING`,
+      [type, value]
+    );
+    await client.query("COMMIT");
+    return result.rows[0] ?? null;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function getDashboardSummary() {
   const result = await pool.query(`
     SELECT

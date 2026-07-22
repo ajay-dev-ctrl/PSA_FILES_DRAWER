@@ -35,6 +35,9 @@ import {
   getTopUsers,
   deleteMemory,
   getDashboardSummary,
+  listSavedOptions,
+  addSavedOption,
+  deleteSavedOption,
 } from "./db.js";
 import { enqueueJob, redis } from "./queue.js";
 import { ensureBucket, uploadObject, getPresignedUrl, deleteObject } from "./storage.js";
@@ -439,6 +442,50 @@ app.get("/memories", requireAuth, async (req, res, next) => {
 
 app.get("/dashboard/summary", requireAuth, async (_req, res, next) => {
   try { res.json(await getDashboardSummary()); } catch (err) { next(err); }
+});
+
+/**
+ * GET /options
+ * Saved position / office-division values, independent of any employee.
+ */
+app.get("/options", requireAuth, async (_req, res, next) => {
+  try { res.json(await listSavedOptions()); } catch (err) { next(err); }
+});
+
+/**
+ * POST /options
+ * Add a reusable position or office/division value — no employee required.
+ */
+app.post("/options", requireAuth, async (req, res, next) => {
+  try {
+    const { type, value } = req.body ?? {};
+    if (type !== "position" && type !== "office_division") {
+      return res.status(400).json({ error: "type must be 'position' or 'office_division'." });
+    }
+    const trimmed = String(value ?? "").trim();
+    if (!trimmed) return res.status(400).json({ error: "value is required." });
+    await addSavedOption(type, trimmed);
+    res.status(201).json(await listSavedOptions());
+    broadcast("refresh");
+  } catch (err) { next(err); }
+});
+
+/**
+ * DELETE /options
+ * Permanently remove a saved position or office/division value.
+ */
+app.delete("/options", requireAuth, async (req, res, next) => {
+  try {
+    const { type, value } = req.body ?? {};
+    if (type !== "position" && type !== "office_division") {
+      return res.status(400).json({ error: "type must be 'position' or 'office_division'." });
+    }
+    const trimmed = String(value ?? "").trim();
+    if (!trimmed) return res.status(400).json({ error: "value is required." });
+    await deleteSavedOption(type, trimmed);
+    res.json(await listSavedOptions());
+    broadcast("refresh");
+  } catch (err) { next(err); }
 });
 
 const searchLimiter = rateLimit({
