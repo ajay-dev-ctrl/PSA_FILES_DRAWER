@@ -38,6 +38,7 @@ export default function Dashboard({ onOpenInAddFiles }) {
   const [officeFilter, setOfficeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [expandedIds, setExpandedIds] = useState(() => new Set());
+  const [tableCollapsed, setTableCollapsed] = useState(false);
 
   function toggleExpanded(id) {
     setExpandedIds((prev) => {
@@ -51,10 +52,11 @@ export default function Dashboard({ onOpenInAddFiles }) {
     let cancelled = false;
     fetch(`${apiUrl}/dashboard/summary`, { credentials: "include" })
       .then((r) => {
+        if (r.status === 401) { window.location.replace("/login.html"); return null; }
         if (!r.ok) throw new Error("Could not load dashboard data.");
         return r.json();
       })
-      .then((rows) => { if (!cancelled) setEmployees(rows); })
+      .then((rows) => { if (!cancelled && rows) setEmployees(rows); })
       .catch((e) => { if (!cancelled) setError(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -127,8 +129,20 @@ export default function Dashboard({ onOpenInAddFiles }) {
             <span className="panel-title-dot" />
             Document Status
           </h3>
+          <button
+            type="button"
+            className={`dash-expand-toggle${tableCollapsed ? "" : " dash-expand-toggle--open"}`}
+            aria-expanded={!tableCollapsed}
+            aria-label={tableCollapsed ? "Show document status table" : "Hide document status table"}
+            title={tableCollapsed ? "Show table" : "Hide table"}
+            onClick={() => setTableCollapsed((v) => !v)}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16">
+              <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
+          </button>
         </div>
-        {loading ? (
+        {tableCollapsed ? null : loading ? (
           <div className="empty">Loading…</div>
         ) : error ? (
           <div className="empty">{error}</div>

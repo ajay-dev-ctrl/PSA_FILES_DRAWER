@@ -139,7 +139,7 @@ function CustomSelect({ value, onChange, options, placeholder, style, dropdownHe
 
 // ── ClearableInput — text input with an inline ✕ to wipe a mistyped value ─────
 // onEnter (optional): fires when the user presses Enter, e.g. to trigger Add.
-function ClearableInput({ id, value, onChange, placeholder, required, onEnter, onClear }) {
+function ClearableInput({ id, value, onChange, placeholder, required, onEnter }) {
   return (
     <div style={{ position: "relative" }}>
       <input
@@ -154,28 +154,20 @@ function ClearableInput({ id, value, onChange, placeholder, required, onEnter, o
       {value && (
         <button
           type="button"
-          title={onClear ? "Delete saved value" : "Clear"}
-          aria-label={onClear ? "Delete saved value" : "Clear"}
-          onClick={onClear ?? (() => onChange(""))}
+          title="Clear"
+          aria-label="Clear"
+          onClick={() => onChange("")}
           style={{
             position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)",
             width: 22, height: 22, padding: 0,
             display: "flex", alignItems: "center", justifyContent: "center",
             borderRadius: "50%", border: "none", background: "transparent",
-            color: onClear ? "#991b1b" : "#94a3b8", cursor: "pointer", fontSize: "1.1rem", lineHeight: 1,
+            color: "#94a3b8", cursor: "pointer", fontSize: "1.1rem", lineHeight: 1,
           }}
-          onMouseEnter={e => { e.currentTarget.style.background = onClear ? "#fee2e2" : "#f1f5f9"; e.currentTarget.style.color = onClear ? "#991b1b" : "#475569"; }}
-          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = onClear ? "#991b1b" : "#94a3b8"; }}
+          onMouseEnter={e => { e.currentTarget.style.background = "#f1f5f9"; e.currentTarget.style.color = "#475569"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#94a3b8"; }}
         >
-          {onClear ? (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-              <path d="M10 11v6"/>
-              <path d="M14 11v6"/>
-              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-            </svg>
-          ) : "×"}
+          ×
         </button>
       )}
     </div>
@@ -1669,7 +1661,6 @@ function App() {
                         onChange={setPosition2}
                         placeholder="e.g. Administrative Officer IV"
                         onEnter={saveSecondAssignment}
-                        onClear={clearPosition2}
                       />
                     </label>
                     <label>
@@ -1714,7 +1705,6 @@ function App() {
                         onChange={setOfficeDivision2}
                         placeholder="e.g. RSSO II / CRASD"
                         onEnter={saveSecondAssignment}
-                        onClear={clearOfficeDivision2}
                       />
                     </label>
                     <label>
