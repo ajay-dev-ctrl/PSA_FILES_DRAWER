@@ -81,8 +81,10 @@ When this moves to Kubernetes:
 
 See [docs/kubernetes-data-flow.md](docs/kubernetes-data-flow.md).
 
+## Access
 
-admin 
-URL: http://localhost:5173/login.html
-Username: admin123
-Password: Aa1!p4yUJTYnkBd
+This system is admin-only — there is no public self-registration. Log in at
+<http://localhost:5173/login.html> with an account created by an admin
+(Settings → Create User, once signed in as an existing admin). Credentials
+are never committed to this repo; they're issued out-of-band by whoever
+manages the deployment.

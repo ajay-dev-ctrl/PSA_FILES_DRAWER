@@ -53,7 +53,7 @@ services:
 
   api:
     build:
-      context: ./services/api
+      context: ./backend/api
     env_file:
       - .env
     ports:
@@ -68,7 +68,7 @@ services:
 
   worker:
     build:
-      context: ./services/worker
+      context: ./backend/worker
     environment:
       DATABASE_URL:     ${DATABASE_URL}
       REDIS_URL:        ${REDIS_URL}
@@ -82,7 +82,7 @@ services:
 
   frontend:
     build:
-      context: ./apps/frontend
+      context: ./frontend
     environment:
       VITE_API_URL: ${VITE_API_URL}
       CHOKIDAR_USEPOLLING: "true"
@@ -90,7 +90,7 @@ services:
     ports:
       - "5173:5173"
     volumes:
-      - ./apps/frontend:/app
+      - ./frontend:/app
       - /app/node_modules
     depends_on:
       - api
