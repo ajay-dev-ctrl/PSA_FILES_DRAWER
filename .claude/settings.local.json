@@ -18,7 +18,8 @@
       "Bash(docker info *)",
       "Bash(powershell -command \"Get-Item 'c:\\\\Users\\\\John Asley\\\\OneDrive\\\\Desktop\\\\PAYROLL PSA\\\\apps\\\\frontend\\\\src\\\\psa-logo.png' | Select-Object Name, Length; Get-Item 'c:\\\\Users\\\\John Asley\\\\OneDrive\\\\Desktop\\\\PSA WORKS\\\\apps\\\\frontend\\\\src\\\\psa-logo.png' | Select-Object Name, Length\")",
       "Bash(git -C \"c:\\\\Users\\\\John Asley\\\\OneDrive\\\\Desktop\\\\PSA WORKS\" remote -v)",
-      "Bash(git -C \"c:\\\\Users\\\\John Asley\\\\OneDrive\\\\Desktop\\\\PSA WORKS\" status --short)"
+      "Bash(git -C \"c:\\\\Users\\\\John Asley\\\\OneDrive\\\\Desktop\\\\PSA WORKS\" status --short)",
+      "Bash(curl -s -i -X POST http://localhost:3000/auth/login -H \"Content-Type: application/json\" -d '{\"username\":\"superadmin\",\"password\":\"Bw574p*Zp@UW3CLrw#x0\"}')"
     ],
     "additionalDirectories": [
       "c:\\Users\\John Asley\\OneDrive\\Desktop\\PAYROLL PSA\\services\\worker",

@@ -2,8 +2,10 @@ import pg from "pg";
 
 const { Pool } = pg;
 
+// Only used once, in ensureSchema(), to seed the first admin's `role` column
+// when it's introduced. Authorization after that reads the role column, not
+// this env var — see requireAdmin in server.js.
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME ?? "admin123").toLowerCase();
-// Used in queries: LOWER(username) <> ADMIN_USERNAME prevents admin from being blocked/deleted
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL
@@ -60,6 +62,10 @@ export async function ensureSchema() {
   await pool.query(
     "CREATE INDEX IF NOT EXISTS idx_memories_source_prefix ON memories (LOWER(content->>'source') text_pattern_ops)"
   );
+  // Employee ID uniqueness is checked on every create — keep that lookup O(log n).
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS idx_memories_employee_id ON memories (LOWER(content->>'employeeId'))"
+  );
   await pool.query("CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status)");
   await pool.query(
     "CREATE INDEX IF NOT EXISTS idx_positions_created_at ON positions(created_at DESC)"
@@ -82,6 +88,12 @@ export async function ensureSchema() {
   `);
   await pool.query(
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_files_memory_doc ON files (memory_id, doc_item)"
+  );
+  // Scanned photos are accepted alongside PDFs, so the stored type has to be
+  // remembered — view/download must send the right Content-Type back.
+  // Existing rows predate images and are all PDFs.
+  await pool.query(
+    "ALTER TABLE files ADD COLUMN IF NOT EXISTS mime_type TEXT NOT NULL DEFAULT 'application/pdf'"
   );
   await pool.query(
     "CREATE INDEX IF NOT EXISTS idx_files_memory_id ON files (memory_id)"
@@ -110,6 +122,24 @@ export async function ensureSchema() {
     ALTER TABLE users ADD CONSTRAINT users_status_check
       CHECK (status IN ('pending', 'active', 'blocked', 'rejected'))
   `);
+
+  // Real role column — replaces the old "username === ADMIN_USERNAME" check.
+  // Supports multiple admins and doesn't silently change privileges if the
+  // ADMIN_USERNAME env var is ever edited.
+  await pool.query(
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'staff'"
+  );
+  await pool.query("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check");
+  await pool.query(`
+    ALTER TABLE users ADD CONSTRAINT users_role_check
+      CHECK (role IN ('staff', 'admin'))
+  `);
+  // One-time seed so existing deployments keep working: whichever account
+  // currently matches ADMIN_USERNAME becomes the first real admin.
+  await pool.query(
+    "UPDATE users SET role = 'admin' WHERE LOWER(username) = $1 AND role <> 'admin'",
+    [ADMIN_USERNAME]
+  );
 
   // Fix: extend doc_item constraint from A–P to A–Q to match frontend slot 'Q' (Others)
   await pool.query(`
@@ -175,19 +205,44 @@ export async function createJob(payload) {
   try {
     await client.query("BEGIN");
 
-    const duplicateResult = await client.query(
-      `SELECT id
-       FROM memories
-       WHERE kind = $1
-         AND LOWER(content->>'name') = LOWER($2)
-       LIMIT 1`,
-      ["position_input", payload.name ?? ""]
-    );
+    const employeeId = (payload.employeeId ?? "").trim();
 
-    if (duplicateResult.rowCount > 0) {
-      const error = new Error("A user with this name already exists.");
-      error.status = 409;
-      throw error;
+    if (employeeId) {
+      // Employee ID is the real identity once it is supplied, so it must be
+      // unique — and two people are then free to share a name.
+      const idClash = await client.query(
+        `SELECT id
+         FROM memories
+         WHERE kind = $1
+           AND LOWER(content->>'employeeId') = LOWER($2)
+         LIMIT 1`,
+        ["position_input", employeeId]
+      );
+
+      if (idClash.rowCount > 0) {
+        const error = new Error(`Employee ID "${employeeId}" is already used by another record.`);
+        error.status = 409;
+        throw error;
+      }
+    } else {
+      // No ID given — fall back to the old name check so records without an
+      // identifier still cannot silently collide.
+      const duplicateResult = await client.query(
+        `SELECT id
+         FROM memories
+         WHERE kind = $1
+           AND LOWER(content->>'name') = LOWER($2)
+         LIMIT 1`,
+        ["position_input", payload.name ?? ""]
+      );
+
+      if (duplicateResult.rowCount > 0) {
+        const error = new Error(
+          "A user with this name already exists. Add an Employee ID to keep both records."
+        );
+        error.status = 409;
+        throw error;
+      }
     }
 
     const memoryResult = await client.query(
@@ -443,17 +498,18 @@ export async function getJob(id) {
  * Returns the old object_key so the caller can delete the replaced MinIO object.
  * Complexity: O(log n) via composite unique index.
  */
-export async function upsertFileMeta(memoryId, docItem, filename, objectKey, sizeBytes) {
+export async function upsertFileMeta(memoryId, docItem, filename, objectKey, sizeBytes, mimeType = "application/pdf") {
   const result = await pool.query(
-    `INSERT INTO files (memory_id, doc_item, filename, object_key, size_bytes)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO files (memory_id, doc_item, filename, object_key, size_bytes, mime_type)
+     VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (memory_id, doc_item) DO UPDATE
        SET filename   = EXCLUDED.filename,
            object_key = EXCLUDED.object_key,
            size_bytes = EXCLUDED.size_bytes,
+           mime_type  = EXCLUDED.mime_type,
            uploaded_at = NOW()
      RETURNING *`,
-    [memoryId, docItem, filename, objectKey, sizeBytes]
+    [memoryId, docItem, filename, objectKey, sizeBytes, mimeType]
   );
   return result.rows[0];
 }
@@ -530,23 +586,66 @@ export async function getPendingUsers() {
 
 export async function getAllManagedUsers() {
   const result = await pool.query(
-    "SELECT id, username, status, created_at FROM users WHERE LOWER(username) <> $1 ORDER BY created_at DESC LIMIT 200",
-    [ADMIN_USERNAME]
+    "SELECT id, username, status, role, created_at FROM users ORDER BY created_at DESC LIMIT 200"
   );
   return result.rows;
 }
 
+export async function getUserById(userId) {
+  const result = await pool.query(
+    "SELECT id, username, status, role, created_at FROM users WHERE id = $1 LIMIT 1",
+    [userId]
+  );
+  return result.rows[0] ?? null;
+}
+
+/**
+ * Count active admins, optionally excluding one account (the one about to
+ * be blocked/deleted/demoted) — used to refuse an action that would leave
+ * the system with zero admins.
+ */
+export async function countActiveAdmins(excludeUserId = null) {
+  const result = await pool.query(
+    "SELECT COUNT(*)::int AS n FROM users WHERE role = 'admin' AND status = 'active' AND id <> COALESCE($1::uuid, '00000000-0000-0000-0000-000000000000')",
+    [excludeUserId]
+  );
+  return result.rows[0].n;
+}
+
+/**
+ * Admin-created account — bypasses the old public self-registration/pending
+ * flow entirely. Created directly as 'active' since an admin has already
+ * vetted the person.
+ */
+export async function createManagedUser(username, passwordHash, role = "staff") {
+  const result = await pool.query(
+    `INSERT INTO users (username, password_hash, status, role)
+     VALUES (LOWER($1), $2, 'active', $3)
+     RETURNING id, username, status, role, created_at`,
+    [username, passwordHash, role]
+  );
+  return result.rows[0];
+}
+
+export async function setUserRole(userId, role) {
+  const result = await pool.query(
+    "UPDATE users SET role = $1 WHERE id = $2 RETURNING id, username, status, role",
+    [role, userId]
+  );
+  return result.rows[0] ?? null;
+}
+
 export async function blockUser(userId) {
   const result = await pool.query(
-    "UPDATE users SET status = 'blocked' WHERE id = $1 AND LOWER(username) <> $2 RETURNING id, username, status",
-    [userId, ADMIN_USERNAME]
+    "UPDATE users SET status = 'blocked' WHERE id = $1 RETURNING id, username, status, role",
+    [userId]
   );
   return result.rows[0] ?? null;
 }
 
 export async function unblockUser(userId) {
   const result = await pool.query(
-    "UPDATE users SET status = 'active' WHERE id = $1 AND status = 'blocked' RETURNING id, username, status",
+    "UPDATE users SET status = 'active' WHERE id = $1 AND status = 'blocked' RETURNING id, username, status, role",
     [userId]
   );
   return result.rows[0] ?? null;
@@ -554,7 +653,7 @@ export async function unblockUser(userId) {
 
 export async function approveUser(userId) {
   const result = await pool.query(
-    "UPDATE users SET status = 'active' WHERE id = $1 AND status = 'pending' RETURNING id, username, status",
+    "UPDATE users SET status = 'active' WHERE id = $1 AND status = 'pending' RETURNING id, username, status, role",
     [userId]
   );
   return result.rows[0] ?? null;
@@ -570,8 +669,8 @@ export async function rejectUser(userId) {
 
 export async function deleteSystemUser(userId) {
   const result = await pool.query(
-    "DELETE FROM users WHERE id = $1 AND LOWER(username) <> $2 RETURNING id, username",
-    [userId, ADMIN_USERNAME]
+    "DELETE FROM users WHERE id = $1 RETURNING id, username",
+    [userId]
   );
   return result.rows[0] ?? null;
 }
@@ -660,6 +759,9 @@ export async function getDashboardSummary() {
       m.id,
       m.content->>'name' AS name,
       m.content->>'position' AS position,
+      m.content->>'employeeId' AS employee_id,
+      m.content->>'employmentStatus' AS employment_status,
+      COALESCE(m.content->>'recordStatus', 'Active') AS record_status,
       COALESCE(m.content->>'officeDivision', m.content->>'source', 'unknown') AS office_division,
       COALESCE(
         ARRAY_AGG(f.doc_item) FILTER (WHERE f.doc_item IS NOT NULL),

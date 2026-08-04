@@ -497,6 +497,207 @@ textarea { min-height: 110px; resize: vertical; }
   align-items: start;
 }
 
+/* Denser variants — short fields (dates, grade, step) waste the 1.5fr/0.5fr
+   split above, so pack more of them per row instead. */
+.field-group--even { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.field-group--trio { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.field-group--quad { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+@media (max-width: 900px) {
+  .field-group--quad { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .field-group--trio { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Roster totals — KPI row of stat tiles, not a chart */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.stat-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-xs);
+  padding: 13px 16px;
+}
+/* The number the admin actually asked for leads the row */
+.stat-tile--lead { border-left: 3px solid var(--psa-blue); }
+.stat-tile__label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+.stat-tile__value {
+  /* Proportional figures — tabular-nums would look loose at this size */
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+.stat-tile--lead .stat-tile__value { font-size: 2rem; }
+.stat-tile__foot {
+  margin-top: 1px;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+.stat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.stat-dot--ok   { background: #2e7d46; }
+.stat-dot--miss { background: var(--psa-red); }
+
+/* ── Dashboard: ranked horizontal bars ──────────────────────────────────────
+   One hue only. A count of missing documents is a magnitude, not a status, so
+   the red/green status colours stay reserved for actual state. */
+.rank-bars { display: grid; gap: 10px; }
+.rank-row { display: grid; gap: 4px; }
+.rank-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.81rem;
+}
+.rank-name {
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rank-val {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.rank-val small { font-weight: 500; color: var(--text-muted); }
+.rank-track {
+  height: 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.rank-fill {
+  height: 100%;
+  background: #2f5d9e;
+  border-radius: 999px;
+}
+.rank-fill--soft { background: #7fa3d4; }
+.rank-more { margin-top: 14px; }
+
+.panel-meta { font-size: 0.75rem; color: var(--text-muted); }
+
+.dash-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 860px) { .dash-split { grid-template-columns: 1fr; } }
+
+/* Needs-attention list — a short queue, never the full roster */
+.att-list { display: grid; gap: 7px; }
+.att-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-family: inherit;
+  font-size: 0.83rem;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.att-row:hover { background: #f4f7fb; border-color: var(--psa-blue); }
+.att-row--zero { border-left: 3px solid var(--psa-red); }
+.att-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.att-office { color: var(--text-muted); font-size: 0.77rem; flex-shrink: 0; }
+.att-count {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 0.79rem;
+  font-variant-numeric: tabular-nums;
+}
+.att-count--zero { color: var(--psa-red); }
+
+/* Employees page filter bar — search and filters share one row */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.filter-bar__search {
+  position: relative;
+  flex: 1 1 240px;
+  min-width: 180px;
+}
+.filter-bar > select {
+  flex: 0 1 170px;
+  min-width: 130px;
+}
+.filter-bar input,
+.filter-bar select {
+  margin: 0;
+  height: 38px;
+}
+.filter-bar__more { flex-shrink: 0; height: 38px; }
+.filter-bar__more--on {
+  border-color: var(--psa-blue);
+  color: var(--psa-blue);
+}
+.filter-bar__count {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.filter-bar__count b { color: var(--text); }
+.filter-bar--extra {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.filter-bar--extra > select { flex: 1 1 180px; }
+
+/* Short explanation under a form field — why the field is worth filling in */
+.field-hint {
+  display: block;
+  margin-top: 5px;
+  font-size: 0.76rem;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 .form-actions {
   display: flex;
   gap: 10px;
@@ -859,7 +1060,10 @@ button:disabled { cursor: wait; opacity: 0.6; }
   .topbar, .page-content { padding: 14px 18px; }
   .search-form,
   .job-form,
-  .field-group { grid-template-columns: 1fr; }
+  .field-group,
+  .field-group--even,
+  .field-group--trio,
+  .field-group--quad { grid-template-columns: 1fr; }
   .job-form > label:first-child { grid-column: 1; }
   .page-content { padding: 20px 18px; }
 }
@@ -995,6 +1199,10 @@ button:disabled { cursor: wait; opacity: 0.6; }
 .dash-table-detail-row td {
   padding: 0 12px;
   border-bottom: 1px solid var(--border);
+  /* The expanded cell spans the row, so it also matches the td:last-child rule
+     above — undo the narrow width and centring meant for the chevron column. */
+  width: auto;
+  text-align: left;
 }
 
 .dash-missing-cell {
@@ -1028,6 +1236,217 @@ button:disabled { cursor: wait; opacity: 0.6; }
   color: #2e7d46;
   border: 1px solid #b7ddc2;
 }
+
+/* Document list — full names, same format as the upload select */
+.dash-doc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.dash-doc-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.dash-doc-item:hover {
+  background: #f4f7fb;
+  border-color: var(--psa-blue);
+}
+/* Completion badge — used by both the name list and the inline doc manager */
+.dash-doc-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #fdecea;
+  color: var(--psa-red);
+}
+.dash-doc-item--done .dash-doc-check,
+.doc-row--done .dash-doc-check {
+  background: #e6f4ea;
+  color: #2e7d46;
+}
+.dash-doc-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.dash-doc-state {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--psa-red);
+}
+.dash-doc-item--done .dash-doc-state { color: #2e7d46; }
+.dash-doc-item--done .dash-doc-label { color: var(--muted); }
+
+/* Employee ID / record status under the name in the status table */
+.dash-name-meta {
+  margin-top: 2px;
+  font-size: 0.71rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.dash-inactive-tag {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #eef1f5;
+  border: 1px solid #cfd6e0;
+  color: #64748b;
+  font-weight: 700;
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+}
+
+/* Row action buttons (Edit / Delete) inside the status table */
+.dash-row-actions {
+  white-space: nowrap;
+}
+.dash-row-actions > * + * { margin-left: 6px; }
+.row-delete-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  border-radius: var(--radius-sm);
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1.5px solid #fecaca;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.row-delete-btn:hover { background: #fecaca; }
+
+/* ── Inline document manager (expanded employee row) ── */
+.doc-manager {
+  display: grid;
+  gap: 6px;
+  padding: 14px 18px 18px;
+  border-top: 1px solid var(--border);
+}
+.doc-row {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.doc-row--done { background: #f6fbf7; border-color: #cfe7d6; }
+.doc-row__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.doc-row__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text);
+}
+.doc-row__count {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #e6f4ea;
+  color: #2e7d46;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.doc-row__upload {
+  flex-shrink: 0;
+  padding: 5px 14px;
+  height: 30px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.doc-row__error {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #fff1f0;
+  border: 1.5px solid #ffd6d3;
+  border-radius: 8px;
+  color: #b42318;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.doc-row__files {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.doc-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.doc-file__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.8rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-file__kind {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.doc-file__btn {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+.doc-file__btn--view { background: #dbeafe; color: #1d4ed8; }
+.doc-file__btn--view:hover { background: #bfdbfe; }
+.doc-file__btn--del { background: #fee2e2; color: #991b1b; }
+.doc-file__btn--del:hover { background: #fecaca; }
 
 /* ═══════════════════════════════════════════════════════════════════
    TOAST

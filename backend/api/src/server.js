@@ -27,6 +27,10 @@ import {
   approveUser,
   rejectUser,
   getAllManagedUsers,
+  getUserById,
+  countActiveAdmins,
+  createManagedUser,
+  setUserRole,
   blockUser,
   unblockUser,
   deleteSystemUser,
@@ -130,14 +134,24 @@ function broadcast(event, data = {}) {
 }
 
 // ── Multer: memory storage, 10 MB hard cap, PDF only ─────────────────────────
+// Scanned photos are as common as PDFs for 201 requirements, so both are taken.
+// The declared mimetype is only a first pass — the real check is on the file's
+// magic bytes at upload time.
+const DOCUMENT_MIME_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+];
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },   // 10 MB — rejected before MinIO write
   fileFilter(_req, file, cb) {
-    if (file.mimetype === "application/pdf") {
+    if (DOCUMENT_MIME_TYPES.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(Object.assign(new Error("Only PDF files are accepted."), { status: 400 }));
+      cb(Object.assign(new Error("Only PDF, JPG, PNG, or WebP files are accepted."), { status: 400 }));
     }
   }
 });
@@ -161,6 +175,30 @@ function detectImageMime(buf) {
   if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return "image/gif";
   if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
       buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return "image/webp";
+  return null;
+}
+
+/**
+ * Identify a document from its magic bytes — never from the filename or the
+ * browser-supplied mimetype, both of which a client can lie about.
+ * Returns { mime, ext } or null when the content is neither PDF nor image.
+ */
+const MIME_EXTENSIONS = {
+  "application/pdf": "pdf",
+  "image/jpeg": "jpg",
+  "image/png":  "png",
+  "image/webp": "webp",
+  "image/gif":  "gif",
+};
+
+function detectDocumentType(buf) {
+  if (buf.subarray(0, 4).toString("ascii") === "%PDF") {
+    return { mime: "application/pdf", ext: "pdf" };
+  }
+  const imageMime = detectImageMime(buf.subarray(0, 12));
+  if (imageMime && imageMime !== "image/gif") {
+    return { mime: imageMime, ext: MIME_EXTENSIONS[imageMime] };
+  }
   return null;
 }
 
@@ -207,37 +245,62 @@ const authLimiter = rateLimit({
   message: { error: "Too many auth attempts. Please wait 15 minutes." }
 });
 
-app.post("/auth/register", authLimiter, async (req, res, next) => {
+// ── Escalating login lockout ─────────────────────────────────────────────────
+// A fixed rate-limit window punishes a fat-fingered admin exactly as hard as a
+// brute-force script. Instead: the first lockout is short, and every further
+// wrong password extends the next one by a minute.
+const LOGIN_MAX_ATTEMPTS   = 20;   // wrong passwords tolerated before locking
+const LOGIN_BASE_LOCKOUT   = 6;    // minutes for the first lockout
+const LOGIN_LOCKOUT_STEP   = 1;    // extra minutes per wrong password after that
+const LOGIN_MAX_LOCKOUT    = 60;   // ceiling, so it can never grow unbounded
+const LOGIN_FAIL_MEMORY_S  = 24 * 60 * 60;  // how long the counter remembers
+
+const failKey = (ip) => `loginfail:${ip}`;
+const lockKey = (ip) => `loginlock:${ip}`;
+
+/** Blocks the request while a lockout is live, reporting the exact wait. */
+async function loginLockout(req, res, next) {
   try {
-    const { username, password } = req.body ?? {};
-
-    if (!username || typeof username !== "string" || username.trim().length < 3) {
-      return res.status(400).json({ error: "Username must be at least 3 characters." });
+    const ttl = await redis.ttl(lockKey(req.ip));
+    if (ttl > 0) {
+      const minutes = Math.ceil(ttl / 60);
+      return res.status(429).json({
+        error: `Too many failed attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`,
+        retryAfterSeconds: ttl
+      });
     }
-    if (!password || typeof password !== "string" || password.length < 8) {
-      return res.status(400).json({ error: "Password must be at least 8 characters." });
-    }
-    if (!/[A-Z]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
-      return res.status(400).json({ error: "Password must include uppercase, number, and symbol." });
-    }
+  } catch {
+    // Redis unreachable — fall through rather than lock every admin out. The
+    // global limiter still caps overall request volume.
+  }
+  next();
+}
 
-    const passwordHash = await bcrypt.hash(password, 12);
-
-    try {
-      await pool.query(
-        "INSERT INTO users (username, password_hash, status) VALUES (LOWER($1), $2, 'pending')",
-        [username.trim(), passwordHash]
+/** Records one wrong password and starts a lockout once the limit is passed. */
+async function registerLoginFailure(ip) {
+  try {
+    const fails = await redis.incr(failKey(ip));
+    await redis.expire(failKey(ip), LOGIN_FAIL_MEMORY_S);
+    if (fails >= LOGIN_MAX_ATTEMPTS) {
+      const minutes = Math.min(
+        LOGIN_BASE_LOCKOUT + (fails - LOGIN_MAX_ATTEMPTS) * LOGIN_LOCKOUT_STEP,
+        LOGIN_MAX_LOCKOUT
       );
-    } catch (err) {
-      if (err.code === "23505") return res.status(409).json({ error: "Username already taken." });
-      throw err;
+      await redis.set(lockKey(ip), String(minutes), { EX: minutes * 60 });
     }
+  } catch { /* counting is best-effort */ }
+}
 
-    res.status(201).json({ success: true, pending: true });
-  } catch (err) { next(err); }
-});
+/** A correct password wipes the slate — escalation starts fresh next time. */
+async function clearLoginFailures(ip) {
+  try { await redis.del([failKey(ip), lockKey(ip)]); } catch { /* best-effort */ }
+}
 
-app.post("/auth/login", authLimiter, async (req, res, next) => {
+// NOTE: there is no public /auth/register route. This system is admin-only —
+// accounts are created by an admin via POST /admin/users (see ADMIN ROUTES
+// below), never by public self-signup.
+
+app.post("/auth/login", loginLockout, async (req, res, next) => {
   try {
     const { username, password } = req.body ?? {};
 
@@ -246,7 +309,7 @@ app.post("/auth/login", authLimiter, async (req, res, next) => {
     }
 
     const result = await pool.query(
-      "SELECT id, username, password_hash, status FROM users WHERE LOWER(username) = LOWER($1) LIMIT 1",
+      "SELECT id, username, password_hash, status, role FROM users WHERE LOWER(username) = LOWER($1) LIMIT 1",
       [username.trim()]
     );
     const user = result.rows[0];
@@ -256,6 +319,7 @@ app.post("/auth/login", authLimiter, async (req, res, next) => {
     const match = await bcrypt.compare(password, user?.password_hash ?? _sentinelHash);
 
     if (!user || !match) {
+      await registerLoginFailure(req.ip);
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
@@ -269,8 +333,10 @@ app.post("/auth/login", authLimiter, async (req, res, next) => {
       return res.status(403).json({ error: "Account validation unsuccessful." });
     }
 
+    await clearLoginFailures(req.ip);
+
     const token = jwt.sign(
-      { sub: user.id, username: user.username, jti: randomUUID() },
+      { sub: user.id, username: user.username, role: user.role, jti: randomUUID() },
       JWT_SECRET,
       { expiresIn: "1h" }
     );
@@ -293,8 +359,8 @@ app.get("/auth/me", requireAuth, async (req, res, next) => {
       [req.user.sub]
     );
     const hasAvatar = !!result.rows[0]?.avatar_key;
-    const isAdmin = req.user.username?.toLowerCase() === ADMIN_USERNAME;
-    res.json({ username: req.user.username, hasAvatar, isAdmin });
+    const isAdmin = req.user.role === "admin";
+    res.json({ id: req.user.sub, username: req.user.username, hasAvatar, isAdmin });
   } catch (err) { next(err); }
 });
 
@@ -613,6 +679,7 @@ app.get("/files/:memoryId", requireAuth, async (req, res, next) => {
       docItem:    r.doc_item,
       filename:   r.filename,
       sizeBytes:  r.size_bytes,
+      mimeType:   r.mime_type ?? "application/pdf",
       uploadedAt: r.uploaded_at
     }));
 
@@ -661,7 +728,7 @@ app.get("/files/:memoryId/:docItem/view", requireAuth, async (req, res, next) =>
     const meta = await getFileMeta(memoryId, docItem.toUpperCase());
     if (!meta) return res.status(404).json({ error: "File not found." });
 
-    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Type", meta.mime_type ?? "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="${meta.filename}"`);
     res.setHeader("Cache-Control", "private, max-age=60");
 
@@ -693,7 +760,7 @@ app.get("/files/:memoryId/:docItem/download", requireAuth, async (req, res, next
     const BUCKET = process.env.MINIO_BUCKET ?? "psa-documents";
     const stream = await minio.getObject(BUCKET, meta.object_key);
 
-    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Type", meta.mime_type ?? "application/pdf");
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="${encodeURIComponent(meta.filename)}"`
@@ -723,9 +790,11 @@ app.post(
         return res.status(400).json({ error: "No file uploaded." });
       }
 
-      const magic = req.file.buffer.subarray(0, 4).toString("ascii");
-      if (magic !== "%PDF") {
-        return res.status(400).json({ error: "File content is not a valid PDF." });
+      const detected = detectDocumentType(req.file.buffer);
+      if (!detected) {
+        return res.status(400).json({
+          error: "File content is not a valid PDF, JPG, PNG, or WebP."
+        });
       }
 
       const memCheck = await pool.query("SELECT id FROM memories WHERE id=$1 LIMIT 1", [memoryId]);
@@ -733,15 +802,17 @@ app.post(
         return res.status(404).json({ error: "User not found." });
       }
 
-      const objectKey    = `${randomUUID()}.pdf`;
+      const objectKey    = `${randomUUID()}.${detected.ext}`;
       const safeFilename = sanitizeFilename(req.file.originalname);
 
-      await uploadObject(objectKey, req.file.buffer, req.file.size);
+      await uploadObject(objectKey, req.file.buffer, req.file.size, detected.mime);
 
       // upsertFileMeta replaces any existing row for this slot (ON CONFLICT DO UPDATE)
       // and returns the old object_key so we can delete the replaced MinIO object
       const existing = await getFileMeta(memoryId, docItem.toUpperCase());
-      const row = await upsertFileMeta(memoryId, docItem.toUpperCase(), safeFilename, objectKey, req.file.size);
+      const row = await upsertFileMeta(
+        memoryId, docItem.toUpperCase(), safeFilename, objectKey, req.file.size, detected.mime
+      );
       if (existing?.object_key && existing.object_key !== objectKey) {
         await deleteObject(existing.object_key).catch(() => {});
       }
@@ -752,7 +823,8 @@ app.post(
         id:        row.id,
         docItem:   docItem.toUpperCase(),
         filename:  safeFilename,
-        sizeBytes: req.file.size
+        sizeBytes: req.file.size,
+        mimeType:  detected.mime
       });
     } catch (err) { next(err); }
   }
@@ -782,7 +854,7 @@ app.get("/files/:memoryId/:docItem/:fileId/download", requireAuth, async (req, r
     const BUCKET = process.env.MINIO_BUCKET ?? "psa-documents";
     const stream = await minio.getObject(BUCKET, meta.object_key);
 
-    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Type", meta.mime_type ?? "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(meta.filename)}"`);
     stream.pipe(res);
   } catch (err) { next(err); }
@@ -792,14 +864,76 @@ app.get("/files/:memoryId/:docItem/:fileId/download", requireAuth, async (req, r
 // ADMIN ROUTES
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ADMIN_USERNAME = (process.env.ADMIN_USERNAME ?? "admin123").toLowerCase();
-
 function requireAdmin(req, res, next) {
-  if (req.user?.username?.toLowerCase() !== ADMIN_USERNAME) {
+  if (req.user?.role !== "admin") {
     return res.status(403).json({ error: "Admin access required." });
   }
   next();
 }
+
+/**
+ * POST /admin/users
+ * Create a new managed account directly — this is the only way accounts get
+ * created (there is no public self-registration route). Created 'active'
+ * immediately since an admin has already vetted the person.
+ */
+app.post("/admin/users", requireAuth, requireAdmin, authLimiter, async (req, res, next) => {
+  try {
+    const { username, password, role } = req.body ?? {};
+
+    if (!username || typeof username !== "string" || username.trim().length < 3) {
+      return res.status(400).json({ error: "Username must be at least 3 characters." });
+    }
+    if (!password || typeof password !== "string" || password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters." });
+    }
+    if (!/[A-Z]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+      return res.status(400).json({ error: "Password must include uppercase, number, and symbol." });
+    }
+    const safeRole = role === "admin" ? "admin" : "staff";
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    try {
+      const user = await createManagedUser(username.trim(), passwordHash, safeRole);
+      res.status(201).json({ success: true, user });
+    } catch (err) {
+      if (err.code === "23505") return res.status(409).json({ error: "Username already taken." });
+      throw err;
+    }
+  } catch (err) { next(err); }
+});
+
+/**
+ * PATCH /admin/users/:userId/role
+ * Promote/demote between 'staff' and 'admin'. Refuses to touch your own
+ * account, and refuses to demote the last remaining active admin.
+ */
+app.patch("/admin/users/:userId/role", requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    if (!UUID_RE.test(userId)) return res.status(400).json({ error: "Invalid ID format." });
+    if (userId === req.user.sub) {
+      return res.status(400).json({ error: "You cannot change your own role." });
+    }
+    const { role } = req.body ?? {};
+    if (role !== "staff" && role !== "admin") {
+      return res.status(400).json({ error: "role must be 'staff' or 'admin'." });
+    }
+
+    const target = await getUserById(userId);
+    if (!target) return res.status(404).json({ error: "User not found." });
+
+    if (role === "staff" && target.role === "admin") {
+      const remaining = await countActiveAdmins(userId);
+      if (remaining === 0) {
+        return res.status(400).json({ error: "Cannot demote the last remaining admin." });
+      }
+    }
+
+    const user = await setUserRole(userId, role);
+    res.json({ success: true, user });
+  } catch (err) { next(err); }
+});
 
 app.get("/admin/pending-users", requireAuth, requireAdmin, async (req, res, next) => {
   try { res.json(await getPendingUsers()); } catch (err) { next(err); }
@@ -827,8 +961,19 @@ app.get("/admin/users", requireAuth, requireAdmin, async (req, res, next) => {
 
 app.post("/admin/block/:userId", requireAuth, requireAdmin, async (req, res, next) => {
   try {
-    const user = await blockUser(req.params.userId);
-    if (!user) return res.status(404).json({ error: "User not found." });
+    const { userId } = req.params;
+    if (userId === req.user.sub) {
+      return res.status(400).json({ error: "You cannot block your own account." });
+    }
+    const target = await getUserById(userId);
+    if (!target) return res.status(404).json({ error: "User not found." });
+    if (target.role === "admin") {
+      const remaining = await countActiveAdmins(userId);
+      if (remaining === 0) {
+        return res.status(400).json({ error: "Cannot block the last remaining admin." });
+      }
+    }
+    const user = await blockUser(userId);
     res.json({ success: true, user });
   } catch (err) { next(err); }
 });
@@ -845,8 +990,18 @@ app.delete("/admin/users/:userId", requireAuth, requireAdmin, async (req, res, n
   try {
     const { userId } = req.params;
     if (!UUID_RE.test(userId)) return res.status(400).json({ error: "Invalid ID format." });
+    if (userId === req.user.sub) {
+      return res.status(400).json({ error: "You cannot delete your own account." });
+    }
+    const target = await getUserById(userId);
+    if (!target) return res.status(404).json({ error: "User not found." });
+    if (target.role === "admin") {
+      const remaining = await countActiveAdmins(userId);
+      if (remaining === 0) {
+        return res.status(400).json({ error: "Cannot delete the last remaining admin." });
+      }
+    }
     const user = await deleteSystemUser(userId);
-    if (!user) return res.status(404).json({ error: "User not found or cannot be deleted." });
     res.json({ success: true, user });
   } catch (err) { next(err); }
 });

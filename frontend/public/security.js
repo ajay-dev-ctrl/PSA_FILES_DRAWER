@@ -63,23 +63,8 @@ const AUTH = (() => {
     localStorage.setItem(STORAGE_LOCKOUT, JSON.stringify(store));
   }
 
-  // ── REGISTER: POST /auth/register ────────────────────────────────────────────
-
-  async function registerUser(username, password) {
-    try {
-      const res  = await fetch(`${API_URL}/auth/register`, {
-        method:      'POST',
-        headers:     { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body:        JSON.stringify({ username, password }),
-      });
-      const data = await res.json();
-      if (res.ok) return { success: true };
-      return { success: false, error: data.error ?? 'Registration failed.' };
-    } catch {
-      return { success: false, error: 'Could not connect to server.' };
-    }
-  }
+  // NOTE: there is no public registration call here. Accounts are created by
+  // an admin (Settings → Create User), never by self-signup.
 
   // ── LOGIN: POST /auth/login + client-side lockout UX ─────────────────────────
 
@@ -165,7 +150,6 @@ const AUTH = (() => {
 
   // ── PUBLIC API ────────────────────────────────────────────────────────────────
   return {
-    registerUser,
     authenticateUser,
     requireAuth,
     validateSession,

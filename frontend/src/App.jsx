@@ -2,8 +2,10 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import psaLogo from "./psa-logo.png";
-import { REQUIREMENT_DOCUMENTS } from "./constants.js";
+import { EMPLOYMENT_STATUSES, RECORD_STATUSES, REQUIREMENT_DOCUMENTS } from "./constants.js";
 import Dashboard from "./pages/Dashboard.jsx";
+import DocumentStatusTable, { useDocumentStatusRows } from "./components/DocumentStatusTable.jsx";
+import EmployeeDocumentManager from "./components/EmployeeDocumentManager.jsx";
 
 const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
@@ -31,7 +33,7 @@ function downloadFile(memoryId, docItem, fileId, filename) {
   const downloadUrl = `${apiUrl}/files/${memoryId}/${docItem}/${fileId}/download`;
   const a = document.createElement("a");
   a.href = downloadUrl;
-  a.download = filename || "document.pdf";
+  a.download = filename || "document";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -428,6 +430,16 @@ function App() {
   const [officeDivision,   setOfficeDivision]    = useState("");
   const [position2,        setPosition2]         = useState("");
   const [officeDivision2,  setOfficeDivision2]   = useState("");
+  // ── Employee record fields ──────────────────────────────────────────────────
+  const [employeeId,       setEmployeeId]        = useState("");
+  const [employmentStatus, setEmploymentStatus]  = useState("");
+  const [recordStatus,     setRecordStatus]      = useState("Active");
+  const [dateHired,        setDateHired]         = useState("");
+  const [salaryGrade,      setSalaryGrade]       = useState("");
+  const [salaryStep,       setSalaryStep]        = useState("");
+  const [email,            setEmail]             = useState("");
+  const [mobile,           setMobile]            = useState("");
+  const [dateOfBirth,      setDateOfBirth]       = useState("");
   const [toast,            setToast]             = useState("");
   const [searchTerm,       setSearchTerm]        = useState("");
   const [userMatches,      setUserMatches]       = useState([]);
@@ -444,6 +456,7 @@ function App() {
   const [error,            setError]             = useState("");
   const [uploadedFiles,    setUploadedFiles]     = useState({});
   const [currentUser,      setCurrentUser]       = useState(null);
+  const [currentUserId,    setCurrentUserId]     = useState(null);
   const [isAdmin,          setIsAdmin]           = useState(false);
   const [authChecked,      setAuthChecked]       = useState(false);
   const [avatarUrl,        setAvatarUrl]         = useState(null);
@@ -466,6 +479,13 @@ function App() {
   // Admin — all managed users
   const [allUsers,         setAllUsers]          = useState([]);
   const [allUsersLoading,  setAllUsersLoading]   = useState(false);
+
+  // Admin — create user
+  const [newUsername,      setNewUsername]       = useState("");
+  const [newPassword,      setNewPassword]       = useState("");
+  const [newRole,          setNewRole]           = useState("staff");
+  const [newUserError,     setNewUserError]      = useState("");
+  const [creatingUser,     setCreatingUser]      = useState(false);
 
   const esRef        = useRef(null);
   const avatarInputRef = useRef(null);
@@ -518,6 +538,7 @@ function App() {
         } else if (r.ok) {
           return r.json().then(async (data) => {
             setCurrentUser(data.username);
+            setCurrentUserId(data.id);
             setIsAdmin(!!data.isAdmin);
             if (data.hasAvatar) {
               try {
@@ -586,12 +607,93 @@ function App() {
         const map = {};
         for (const f of rows) {
           if (!map[f.docItem]) map[f.docItem] = { uploading: false, errMsg: null, files: [] };
-          map[f.docItem].files.push({ id: f.id, filename: f.filename, sizeBytes: f.sizeBytes });
+          map[f.docItem].files.push({
+            id: f.id, filename: f.filename, sizeBytes: f.sizeBytes, mimeType: f.mimeType
+          });
         }
         setUploadedFiles(map);
       })
       .catch(() => {});
   }, [openMemoryId]);
+
+  // Document-completion rows for the status table on the Employees page.
+  const {
+    rows: docStatusRows,
+    loading: docStatusLoading,
+    error: docStatusError,
+    refresh: refreshDocStatus,
+  } = useDocumentStatusRows();
+
+  // ── Employees page filters ──────────────────────────────────────────────────
+  const [empOffice,     setEmpOffice]     = useState("");
+  const [empPosition,   setEmpPosition]   = useState("");
+  const [empEmployment, setEmpEmployment] = useState("");
+  const [empRecord,     setEmpRecord]     = useState("");
+  const [empCompletion, setEmpCompletion] = useState("all");
+
+  // Dropdown choices come from the data itself, so they never list a value
+  // nobody actually has.
+  const empFilterOptions = useMemo(() => {
+    const uniq = (vals) => Array.from(new Set(vals.filter(Boolean))).sort();
+    return {
+      offices:     uniq(docStatusRows.map((r) => r.officeDivision)),
+      positions:   uniq(docStatusRows.map((r) => r.position)),
+      employments: uniq(docStatusRows.map((r) => r.employmentStatus)),
+      records:     uniq(docStatusRows.map((r) => r.recordStatus)),
+    };
+  }, [docStatusRows]);
+
+  const [moreFilters, setMoreFilters] = useState(false);
+
+  // Headline counts for the Add Employee page, so the admin sees the size of
+  // the roster before adding to it.
+  const employeeStats = useMemo(() => {
+    const total      = docStatusRows.length;
+    const active     = docStatusRows.filter((r) => r.recordStatus === "Active").length;
+    const complete   = docStatusRows.filter((r) => r.pct >= 100).length;
+    return { total, active, complete, incomplete: total - complete };
+  }, [docStatusRows]);
+
+  // Shown on the "More" button so a filter hidden behind it is never a surprise.
+  const extraFilterCount =
+    (empEmployment ? 1 : 0) + (empRecord ? 1 : 0) + (empCompletion !== "all" ? 1 : 0);
+
+  const empFiltersActive = Boolean(empOffice || empPosition) || extraFilterCount > 0;
+
+  function clearEmpFilters() {
+    setEmpOffice(""); setEmpPosition(""); setEmpEmployment("");
+    setEmpRecord(""); setEmpCompletion("all");
+  }
+
+  // Local filter — the table already holds every employee, so searching does
+  // not need another round trip.
+  const visibleDocStatusRows = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return docStatusRows.filter((r) => {
+      if (q && !`${r.name} ${r.employeeId} ${r.position} ${r.officeDivision}`.toLowerCase().includes(q)) return false;
+      if (empOffice     && r.officeDivision   !== empOffice)     return false;
+      if (empPosition   && r.position         !== empPosition)   return false;
+      if (empEmployment && r.employmentStatus !== empEmployment) return false;
+      if (empRecord     && r.recordStatus     !== empRecord)     return false;
+      if (empCompletion === "complete"   && r.pct < 100)  return false;
+      if (empCompletion === "incomplete" && r.pct >= 100) return false;
+      return true;
+    });
+  }, [docStatusRows, searchTerm, empOffice, empPosition, empEmployment, empRecord, empCompletion]);
+
+  /**
+   * Edit/delete need the full memory record (position2, officeDivision2) which
+   * the dashboard summary does not carry. Prefer the loaded memory; fall back
+   * to the row so the action still works for users past the loaded page.
+   */
+  const memoryForRow = useCallback((r) => {
+    const found = memories.find((m) => m.id === r.id);
+    if (found) return found;
+    return {
+      id: r.id,
+      content: { name: r.name, position: r.position, officeDivision: r.officeDivision },
+    };
+  }, [memories]);
 
   // ── Stable card handlers ─────────────────────────────────────────────────────
   const handleToggle = useCallback((id) => {
@@ -605,7 +707,7 @@ function App() {
     });
   }, []);
 
-  // Load top 10 most-searched users when Add Files page becomes active.
+  // Load top 10 most-searched users when Employees page becomes active.
   // Falls back to 10 most recent users when Redis has no frequency data yet.
   useEffect(() => {
     if (activePage !== "find-user") return;
@@ -627,6 +729,15 @@ function App() {
     setOfficeDivision(user.content?.officeDivision ?? user.content?.source ?? "");
     setPosition2(user.content?.position2 ?? "");
     setOfficeDivision2(user.content?.officeDivision2 ?? "");
+    setEmployeeId(user.content?.employeeId ?? "");
+    setEmploymentStatus(user.content?.employmentStatus ?? "");
+    setRecordStatus(user.content?.recordStatus ?? "Active");
+    setDateHired(user.content?.dateHired ?? "");
+    setSalaryGrade(user.content?.salaryGrade ?? "");
+    setSalaryStep(user.content?.salaryStep ?? "");
+    setEmail(user.content?.email ?? "");
+    setMobile(user.content?.mobile ?? "");
+    setDateOfBirth(user.content?.dateOfBirth ?? "");
     setActivePage("new-user");
   }, []);
 
@@ -648,23 +759,25 @@ function App() {
         throw new Error(body.error ?? "Upload failed.");
       }
       const data = await res.json();
-      setUploadedFiles((prev) => {
-        const slot = prev[docItem] ?? { files: [] };
-        return {
-          ...prev,
-          [docItem]: {
-            uploading: false, errMsg: null,
-            files: [...slot.files, { id: data.id, filename: data.filename, sizeBytes: data.sizeBytes }]
-          }
-        };
-      });
+      // The backend keeps one file per slot (unique index + ON CONFLICT DO
+      // UPDATE), so a new upload replaces rather than appends.
+      setUploadedFiles((prev) => ({
+        ...prev,
+        [docItem]: {
+          uploading: false, errMsg: null,
+          files: [{
+            id: data.id, filename: data.filename, sizeBytes: data.sizeBytes, mimeType: data.mimeType
+          }]
+        }
+      }));
+      refreshDocStatus();
     } catch (err) {
       setUploadedFiles((prev) => ({
         ...prev,
         [docItem]: { ...(prev[docItem] ?? { files: [] }), uploading: false, errMsg: err.message }
       }));
     }
-  }, []);
+  }, [refreshDocStatus]);
 
   const deleteUser = useCallback(async (memory) => {
     const name = memory.content?.name ?? "this user";
@@ -682,10 +795,11 @@ function App() {
       }
       await refreshData();
       setTopUsers(prev => prev.filter(m => m.id !== memory.id));
+      refreshDocStatus();
     } catch (err) {
       alert(err.message);
     }
-  }, [refreshData]);
+  }, [refreshData, refreshDocStatus]);
 
   const deleteFile = useCallback(async (memoryId, docItem, fileId, filename) => {
     if (!window.confirm(`Delete "${filename}"?\n\nThis cannot be undone.`)) return;
@@ -703,10 +817,11 @@ function App() {
           [docItem]: { ...slot, files: slot.files.filter((f) => f.id !== fileId) }
         };
       });
+      refreshDocStatus();
     } catch (err) {
       alert(err.message);
     }
-  }, []);
+  }, [refreshDocStatus]);
 
   // ── Avatar upload ─────────────────────────────────────────────────────────────
   const uploadAvatar = useCallback(async (file) => {
@@ -826,14 +941,24 @@ function App() {
     const res = await fetch(`${apiUrl}/admin/users/${userId}`, {
       method: "DELETE", credentials: "include",
     });
-    if (res.ok) setAllUsers(prev => prev.filter(u => u.id !== userId));
+    if (res.ok) {
+      setAllUsers(prev => prev.filter(u => u.id !== userId));
+    } else {
+      const body = await res.json().catch(() => ({}));
+      alert(body.error ?? "Could not delete account.");
+    }
   }, []);
 
   const handleBlock = useCallback(async (userId) => {
     const res = await fetch(`${apiUrl}/admin/block/${userId}`, {
       method: "POST", credentials: "include",
     });
-    if (res.ok) setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, status: "blocked" } : u));
+    if (res.ok) {
+      setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, status: "blocked" } : u));
+    } else {
+      const body = await res.json().catch(() => ({}));
+      alert(body.error ?? "Could not block account.");
+    }
   }, []);
 
   const handleUnblock = useCallback(async (userId) => {
@@ -842,6 +967,44 @@ function App() {
     });
     if (res.ok) setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, status: "active" } : u));
   }, []);
+
+  const handleSetRole = useCallback(async (userId, role) => {
+    const res = await fetch(`${apiUrl}/admin/users/${userId}/role`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ role }),
+    });
+    if (res.ok) {
+      setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, role } : u));
+    } else {
+      const body = await res.json().catch(() => ({}));
+      alert(body.error ?? "Could not change role.");
+    }
+  }, []);
+
+  const createUser = useCallback(async (e) => {
+    e.preventDefault();
+    setNewUserError("");
+    setCreatingUser(true);
+    try {
+      const res = await fetch(`${apiUrl}/admin/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username: newUsername, password: newPassword, role: newRole }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not create account.");
+      setAllUsers(prev => [data.user, ...prev]);
+      setNewUsername(""); setNewPassword(""); setNewRole("staff");
+      setToast(`Account "${data.user.username}" created.`);
+    } catch (err) {
+      setNewUserError(err.message);
+    } finally {
+      setCreatingUser(false);
+    }
+  }, [newUsername, newPassword, newRole]);
 
   // ── Pagination ───────────────────────────────────────────────────────────────
   async function loadMore() {
@@ -860,16 +1023,41 @@ function App() {
   function resetForm() {
     setPersonName(""); setPosition(""); setOfficeDivision("");
     setPosition2(""); setOfficeDivision2(""); setEditingMemoryId("");
+    setEmployeeId(""); setEmploymentStatus(""); setRecordStatus("Active");
+    setDateHired(""); setSalaryGrade(""); setSalaryStep("");
+    setEmail(""); setMobile(""); setDateOfBirth("");
   }
 
   async function submitUser(e) {
     e.preventDefault();
+
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError("Check the email address — it should look like name@psa.gov.ph.");
+      return;
+    }
+
     setIsSubmitting(true);
     setError("");
+
+    // Only the record fields the user actually filled in are sent, so blank
+    // inputs never overwrite existing values with empty strings.
+    const recordFields = {
+      employeeId: employeeId.trim(),
+      employmentStatus,
+      recordStatus,
+      dateHired,
+      salaryGrade: salaryGrade.trim(),
+      salaryStep: salaryStep.trim(),
+      email: email.trim(),
+      mobile: mobile.trim(),
+      dateOfBirth,
+    };
+
     const payload = {
       name: personName, position, officeDivision,
       ...(position2 ? { position2 } : {}),
       ...(officeDivision2 ? { officeDivision2 } : {}),
+      ...recordFields,
       submittedAt: new Date().toISOString(),
     };
     try {
@@ -881,14 +1069,14 @@ function App() {
           credentials: "include",
           body: JSON.stringify(
             editingMemoryId
-              ? { updates: { name: personName, position, officeDivision, position2, officeDivision2 } }
+              ? { updates: { name: personName, position, officeDivision, position2, officeDivision2, ...recordFields } }
               : { payload }
           ),
         }
       );
       if (!res.ok) {
         const body = await res.json();
-        throw new Error(body.error ?? (editingMemoryId ? "Could not update user." : "Could not save user."));
+        throw new Error(body.error ?? (editingMemoryId ? "Could not update employee." : "Could not save employee."));
       }
       await refreshData();
       resetForm();
@@ -1093,22 +1281,6 @@ function App() {
           </button>
 
           <button
-            className={`nav-item ${activePage === "new-user" ? "nav-item--active" : ""}`}
-            type="button"
-            onClick={() => setActivePage("new-user")}
-          >
-            <span className="nav-item-icon">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-                <circle cx="9" cy="7" r="4"/>
-                <line x1="19" y1="8" x2="19" y2="14"/>
-                <line x1="22" y1="11" x2="16" y2="11"/>
-              </svg>
-            </span>
-            New User
-          </button>
-
-          <button
             className={`nav-item ${activePage === "find-user" ? "nav-item--active" : ""}`}
             type="button"
             onClick={() => setActivePage("find-user")}
@@ -1121,7 +1293,23 @@ function App() {
                 <line x1="9" y1="15" x2="15" y2="15"/>
               </svg>
             </span>
-            Add Files
+            Employees
+          </button>
+
+          <button
+            className={`nav-item ${activePage === "new-user" ? "nav-item--active" : ""}`}
+            type="button"
+            onClick={() => setActivePage("new-user")}
+          >
+            <span className="nav-item-icon">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <line x1="19" y1="8" x2="19" y2="14"/>
+                <line x1="22" y1="11" x2="16" y2="11"/>
+              </svg>
+            </span>
+            Add Employee
           </button>
 
           <button
@@ -1184,10 +1372,8 @@ function App() {
             <span className="topbar-crumb">
               PSA
               <span className="topbar-crumb-sep"> / </span>
-              RSSO II
-              <span className="topbar-crumb-sep"> / </span>
               <span className="topbar-crumb-current">
-                {activePage === "dashboard" ? "Dashboard" : activePage === "new-user" ? "New User" : activePage === "find-user" ? "Add Files" : "Settings"}
+                {activePage === "dashboard" ? "Dashboard" : activePage === "new-user" ? "Add Employee" : activePage === "find-user" ? "Employees" : "Settings"}
               </span>
             </span>
           </div>
@@ -1442,6 +1628,52 @@ function App() {
                 </section>
               )}
 
+              {/* ── Admin: Create User — the only way accounts get created ── */}
+              {isAdmin && (
+                <section className="panel">
+                  <div className="section-heading">
+                    <h3 className="panel-title">
+                      <span className="panel-title-dot" />
+                      Create User
+                    </h3>
+                  </div>
+                  <form onSubmit={createUser} className="job-form" style={{ maxWidth: 480 }}>
+                    <label>
+                      Username
+                      <input
+                        value={newUsername}
+                        onChange={e => setNewUsername(e.target.value)}
+                        placeholder="e.g. jdelacruz"
+                        autoComplete="off"
+                      />
+                    </label>
+                    <label>
+                      Role
+                      <select value={newRole} onChange={e => setNewRole(e.target.value)}>
+                        <option value="staff">Staff</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </label>
+                    <label style={{ gridColumn: "1 / -1" }}>
+                      Temporary Password
+                      <input
+                        type="password"
+                        value={newPassword}
+                        onChange={e => setNewPassword(e.target.value)}
+                        placeholder="8+ chars, uppercase, number, symbol"
+                        autoComplete="new-password"
+                      />
+                    </label>
+                    {newUserError && <p className="error" style={{ gridColumn: "1 / -1" }}>{newUserError}</p>}
+                    <div className="form-actions" style={{ gridColumn: "1 / -1" }}>
+                      <button type="submit" disabled={creatingUser}>
+                        {creatingUser ? "Creating…" : "Create Account"}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              )}
+
               {/* ── Admin: All Users ── */}
               {isAdmin && (
                 <section className="panel">
@@ -1485,14 +1717,40 @@ function App() {
                                 </span>
                               </div>
                               <div>
-                                <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text)" }}>{u.username}</div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <span style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text)" }}>{u.username}</span>
+                                  {u.role === "admin" && (
+                                    <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "#1d4ed8", background: "#dbeafe", border: "1px solid #bfdbfe", borderRadius: 99, padding: "1px 7px" }}>
+                                      Admin
+                                    </span>
+                                  )}
+                                  {u.id === currentUserId && (
+                                    <span style={{ fontSize: "0.68rem", fontWeight: 600, color: "var(--text-muted)" }}>(you)</span>
+                                  )}
+                                </div>
                                 <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 1 }}>
                                   {new Date(u.created_at).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" })}
                                 </div>
                               </div>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                              {u.status === "active" && (
+                              {u.id !== currentUserId && (
+                                <button
+                                  type="button"
+                                  className="ghost-button"
+                                  title={u.role === "admin" ? "Demote to staff" : "Promote to admin"}
+                                  onClick={() => {
+                                    const next = u.role === "admin" ? "staff" : "admin";
+                                    if (window.confirm(`${next === "admin" ? "Grant admin access to" : "Remove admin access from"} "${u.username}"?`)) {
+                                      handleSetRole(u.id, next);
+                                    }
+                                  }}
+                                  style={{ fontSize: "0.76rem", padding: "6px 12px" }}
+                                >
+                                  {u.role === "admin" ? "Demote" : "Make Admin"}
+                                </button>
+                              )}
+                              {u.id === currentUserId ? null : u.status === "active" && (
                                 <button
                                   type="button"
                                   title="Block user"
@@ -1524,22 +1782,24 @@ function App() {
                                   </svg>
                                 </button>
                               )}
-                              <button
-                                type="button"
-                                title="Delete account"
-                                aria-label={`Delete account for ${u.username}`}
-                                onClick={() => handleDeleteSystemUser(u.id, u.username)}
-                                style={{ width: 36, height: 36, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-sm)", background: "#fee2e2", color: "#991b1b", border: "1.5px solid #fecaca", cursor: "pointer", transition: "background 0.12s", flexShrink: 0 }}
-                                onMouseEnter={e => e.currentTarget.style.background = "#fecaca"}
-                                onMouseLeave={e => e.currentTarget.style.background = "#fee2e2"}
-                              >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <polyline points="3 6 5 6 21 6"/>
-                                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                                  <path d="M10 11v6"/><path d="M14 11v6"/>
-                                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-                                </svg>
-                              </button>
+                              {u.id !== currentUserId && (
+                                <button
+                                  type="button"
+                                  title="Delete account"
+                                  aria-label={`Delete account for ${u.username}`}
+                                  onClick={() => handleDeleteSystemUser(u.id, u.username)}
+                                  style={{ width: 36, height: 36, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-sm)", background: "#fee2e2", color: "#991b1b", border: "1.5px solid #fecaca", cursor: "pointer", transition: "background 0.12s", flexShrink: 0 }}
+                                  onMouseEnter={e => e.currentTarget.style.background = "#fecaca"}
+                                  onMouseLeave={e => e.currentTarget.style.background = "#fee2e2"}
+                                >
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="3 6 5 6 21 6"/>
+                                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                                    <path d="M10 11v6"/><path d="M14 11v6"/>
+                                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                                  </svg>
+                                </button>
+                              )}
                             </div>
                           </div>
                         );
@@ -1552,8 +1812,34 @@ function App() {
           ) : activePage === "new-user" ? (
             <>
               <div className="page-header">
-                <div className="page-header-title">New User</div>
+                <div className="page-header-title">Add Employee</div>
                 <div className="page-header-sub">Register a new employee to the status checklist system</div>
+              </div>
+
+              {/* ── Roster totals ── */}
+              <div className="stat-row">
+                <div className="stat-tile stat-tile--lead">
+                  <div className="stat-tile__label">All employees</div>
+                  <div className="stat-tile__value">{employeeStats.total}</div>
+                </div>
+                <div className="stat-tile">
+                  <div className="stat-tile__label">Active</div>
+                  <div className="stat-tile__value">{employeeStats.active}</div>
+                </div>
+                <div className="stat-tile">
+                  <div className="stat-tile__label">
+                    <span className="stat-dot stat-dot--ok" aria-hidden="true" />
+                    Complete documents
+                  </div>
+                  <div className="stat-tile__value">{employeeStats.complete}</div>
+                </div>
+                <div className="stat-tile">
+                  <div className="stat-tile__label">
+                    <span className="stat-dot stat-dot--miss" aria-hidden="true" />
+                    Incomplete
+                  </div>
+                  <div className="stat-tile__value">{employeeStats.incomplete}</div>
+                </div>
               </div>
 
               {/* ── Add / Edit user panel ── */}
@@ -1561,7 +1847,7 @@ function App() {
                 <div className="section-heading">
                   <h3 className="panel-title">
                     <span className="panel-title-dot" />
-                    {editingMemoryId ? "Edit User" : "Add New User"}
+                    {editingMemoryId ? "Edit Employee" : "Add Employee"}
                   </h3>
                   {editingMemoryId && (
                     <button className="ghost-button" type="button" onClick={resetForm}>
@@ -1581,6 +1867,34 @@ function App() {
                       required
                     />
                   </label>
+
+                  <div className="field-group field-group--even">
+                    <label>
+                      Employee ID / Item No.
+                      <ClearableInput
+                        id="input-employee-id"
+                        value={employeeId}
+                        onChange={setEmployeeId}
+                        placeholder="e.g. PSA-2019-0431"
+                      />
+                      <span className="field-hint">
+                        Two people can share a name — this is what keeps their records apart.
+                      </span>
+                    </label>
+                    <label>
+                      Employment Status
+                      <CustomSelect
+                        id="select-employment-status"
+                        value={employmentStatus}
+                        onChange={setEmploymentStatus}
+                        placeholder="Select status…"
+                        options={EMPLOYMENT_STATUSES.map(s => ({ value: s, label: s }))}
+                      />
+                      <span className="field-hint">
+                        Determines which requirement documents actually apply.
+                      </span>
+                    </label>
+                  </div>
 
                   <div className="field-group">
                     <label>
@@ -1627,9 +1941,79 @@ function App() {
                     </label>
                   </div>
 
+                  <div className="field-group field-group--quad">
+                    <label>
+                      Salary Grade
+                      <ClearableInput
+                        id="input-salary-grade"
+                        value={salaryGrade}
+                        onChange={setSalaryGrade}
+                        placeholder="e.g. SG 15"
+                      />
+                    </label>
+                    <label>
+                      Step
+                      <ClearableInput
+                        id="input-salary-step"
+                        value={salaryStep}
+                        onChange={setSalaryStep}
+                        placeholder="e.g. 3"
+                      />
+                    </label>
+                    <label>
+                      Date Hired
+                      <input
+                        id="input-date-hired"
+                        type="date"
+                        value={dateHired}
+                        onChange={(e) => setDateHired(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Date of Birth
+                      <input
+                        id="input-date-of-birth"
+                        type="date"
+                        value={dateOfBirth}
+                        onChange={(e) => setDateOfBirth(e.target.value)}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="field-group field-group--trio">
+                    <label>
+                      Email
+                      <ClearableInput
+                        id="input-email"
+                        value={email}
+                        onChange={setEmail}
+                        placeholder="e.g. jdelacruz@psa.gov.ph"
+                      />
+                    </label>
+                    <label>
+                      Mobile
+                      <ClearableInput
+                        id="input-mobile"
+                        value={mobile}
+                        onChange={setMobile}
+                        placeholder="e.g. 0917 555 0123"
+                      />
+                    </label>
+                    <label>
+                      Record Status
+                      <CustomSelect
+                        id="select-record-status"
+                        value={recordStatus}
+                        onChange={setRecordStatus}
+                        placeholder="Select status…"
+                        options={RECORD_STATUSES.map(s => ({ value: s, label: s }))}
+                      />
+                    </label>
+                  </div>
+
                   <div className="form-actions">
                     <button type="submit" id="save-user-btn" disabled={isSubmitting}>
-                      {isSubmitting ? "Saving…" : editingMemoryId ? "Save Changes" : "Save User"}
+                      {isSubmitting ? "Saving…" : editingMemoryId ? "Save Changes" : "Save Employee"}
                     </button>
                     {editingMemoryId && (
                       <button className="ghost-button" type="button" onClick={resetForm}>
@@ -1751,7 +2135,7 @@ function App() {
           ) : (
             <>
               <div className="page-header">
-                <div className="page-header-title">Add Files</div>
+                <div className="page-header-title">Employees</div>
                 <div className="page-header-sub">Search employees and upload their requirement documents</div>
               </div>
 
@@ -1760,12 +2144,11 @@ function App() {
                 <div className="section-heading">
                   <h3 className="panel-title">
                     <span className="panel-title-dot" />
-                    Add Files
+                    Employees
                   </h3>
                 </div>
-                <label>
-                  Search keyword
-                  <div style={{ position: "relative" }}>
+                <div className="filter-bar">
+                  <div className="filter-bar__search">
                     <svg
                       style={{
                         position: "absolute", left: "12px", top: "50%",
@@ -1783,45 +2166,135 @@ function App() {
                       id="find-user-search"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="Type a name to search…"
+                      placeholder="Search name, ID, position, or office…"
                       style={{ paddingLeft: "36px" }}
+                      aria-label="Search employees"
                     />
                   </div>
-                </label>
-              </section>
 
-              {/* ── Saved Users — top 10 ranked by search frequency ── */}
-              <div>
-                <div className="users-header">
-                  <h2>Saved Users</h2>
-                </div>
+                  <select
+                    aria-label="Filter by office or division"
+                    value={empOffice}
+                    onChange={(e) => setEmpOffice(e.target.value)}
+                  >
+                    <option value="">All offices</option>
+                    {empFilterOptions.offices.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </select>
 
-                <div className="data-column" aria-label="Saved users">
-                  {normalizedSearch && isSearching ? (
-                    <div className="empty">Searching…</div>
-                  ) : normalizedSearch && userMatches.length === 0 ? (
-                    <div className="empty">No users match your search.</div>
-                  ) : (normalizedSearch ? userMatches : topUsers).length === 0 ? (
-                    <div className="empty">No saved users yet.</div>
-                  ) : (
-                    (normalizedSearch ? userMatches : topUsers).map((memory) => (
-                      <UserCard
-                        key={memory.id}
-                        memory={memory}
-                        isOpen={openMemoryId === memory.id}
-                        uploadedFiles={openMemoryId === memory.id ? uploadedFiles : EMPTY_FILES}
-                        initialDocItem={openMemoryId === memory.id ? pendingDocItem : ""}
-                        onToggle={handleToggle}
-                        onEdit={handleEdit}
-                        onUpload={uploadFile}
-                        onDownload={downloadFile}
-                        onDelete={deleteFile}
-                        onDeleteUser={deleteUser}
-                      />
-                    ))
+                  <select
+                    aria-label="Filter by position"
+                    value={empPosition}
+                    onChange={(e) => setEmpPosition(e.target.value)}
+                  >
+                    <option value="">All positions</option>
+                    {empFilterOptions.positions.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+
+                  <button
+                    type="button"
+                    className={`ghost-button filter-bar__more${moreFilters ? " filter-bar__more--on" : ""}`}
+                    aria-expanded={moreFilters}
+                    onClick={() => setMoreFilters((v) => !v)}
+                  >
+                    More{extraFilterCount > 0 ? ` (${extraFilterCount})` : ""}
+                  </button>
+
+                  <span className="filter-bar__count">
+                    <b>{visibleDocStatusRows.length}</b>/{docStatusRows.length}
+                  </span>
+
+                  {(empFiltersActive || searchTerm) && (
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => { clearEmpFilters(); setSearchTerm(""); }}
+                    >
+                      Clear
+                    </button>
                   )}
                 </div>
-              </div>
+
+                {moreFilters && (
+                  <div className="filter-bar filter-bar--extra">
+                    <select
+                      aria-label="Filter by employment status"
+                      value={empEmployment}
+                      onChange={(e) => setEmpEmployment(e.target.value)}
+                    >
+                      <option value="">All employment statuses</option>
+                      {empFilterOptions.employments.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <select
+                      aria-label="Filter by record status"
+                      value={empRecord}
+                      onChange={(e) => setEmpRecord(e.target.value)}
+                    >
+                      <option value="">All record statuses</option>
+                      {empFilterOptions.records.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <select
+                      aria-label="Filter by document completion"
+                      value={empCompletion}
+                      onChange={(e) => setEmpCompletion(e.target.value)}
+                    >
+                      <option value="all">All documents</option>
+                      <option value="complete">Complete only</option>
+                      <option value="incomplete">Incomplete only</option>
+                    </select>
+                  </div>
+                )}
+              </section>
+
+              {/* ── Employees + documents — one table, uploads happen inline ── */}
+              <DocumentStatusTable
+                rows={visibleDocStatusRows}
+                loading={docStatusLoading}
+                error={docStatusError}
+                title="Employees & Document Status"
+                emptyMessage={
+                  normalizedSearch || empFiltersActive
+                    ? "No employees match the current search and filters."
+                    : "No employees yet."
+                }
+                expandedId={openMemoryId}
+                onToggleRow={handleToggle}
+                rowActions={(r) => (
+                  <>
+                    <button
+                      className="edit-button"
+                      type="button"
+                      onClick={() => handleEdit(memoryForRow(r))}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="row-delete-btn"
+                      title="Delete employee"
+                      aria-label={`Delete ${r.name}`}
+                      onClick={() => deleteUser(memoryForRow(r))}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                        <path d="M10 11v6" />
+                        <path d="M14 11v6" />
+                        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                      </svg>
+                    </button>
+                  </>
+                )}
+                renderExpanded={(r) => (
+                  <EmployeeDocumentManager
+                    memoryId={r.id}
+                    uploadedFiles={openMemoryId === r.id ? uploadedFiles : EMPTY_FILES}
+                    onUpload={uploadFile}
+                    onView={viewFile}
+                    onDownload={downloadFile}
+                    onDelete={deleteFile}
+                  />
+                )}
+              />
             </>
           )}
         </div>
