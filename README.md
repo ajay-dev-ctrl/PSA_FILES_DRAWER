@@ -88,3 +88,8 @@ This system is admin-only — there is no public self-registration. Log in at
 (Settings → Create User, once signed in as an existing admin). Credentials
 are never committed to this repo; they're issued out-of-band by whoever
 manages the deployment.
+
+URL:      http://localhost:5173
+Username: admin
+Password: vWVaI_gD7MyM
+http://localhost:5173
