@@ -23,10 +23,11 @@ CREATE TABLE IF NOT EXISTS positions (
 CREATE TABLE IF NOT EXISTS files (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   memory_id    UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
-  doc_item     TEXT NOT NULL CHECK (doc_item IN ('A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P')),
+  doc_item     TEXT NOT NULL CHECK (doc_item IN ('A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q')),
   filename     TEXT NOT NULL,
   object_key   TEXT NOT NULL,
   size_bytes   INTEGER NOT NULL CHECK (size_bytes > 0 AND size_bytes <= 10485760),
+  mime_type    TEXT NOT NULL DEFAULT 'application/pdf',
   uploaded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

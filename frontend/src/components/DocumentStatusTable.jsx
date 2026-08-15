@@ -47,6 +47,8 @@ export function useDocumentStatusRows() {
       employmentStatus: e.employment_status || "",
       recordStatus: e.record_status || "Active",
       officeDivision: e.office_division || "unknown",
+      // Null until the employee has at least one file — drives the stale list.
+      lastUploadAt: e.last_upload_at ? new Date(e.last_upload_at) : null,
       completedSet,
       completedCount,
       pct: TOTAL_DOCS ? Math.round((completedCount / TOTAL_DOCS) * 100) : 0,

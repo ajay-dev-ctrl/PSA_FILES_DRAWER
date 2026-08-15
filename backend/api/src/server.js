@@ -39,6 +39,8 @@ import {
   getTopUsers,
   deleteMemory,
   getDashboardSummary,
+  getRecentUploads,
+  getUploadTrend,
   listSavedOptions,
   addSavedOption,
   deleteSavedOption,
@@ -508,6 +510,30 @@ app.get("/memories", requireAuth, async (req, res, next) => {
 
 app.get("/dashboard/summary", requireAuth, async (_req, res, next) => {
   try { res.json(await getDashboardSummary()); } catch (err) { next(err); }
+});
+
+/**
+ * GET /dashboard/recent
+ * Latest uploads agency-wide, for the dashboard activity feed.
+ */
+app.get("/dashboard/recent", requireAuth, async (req, res, next) => {
+  try {
+    const raw   = Number(req.query.limit);
+    const limit = Number.isFinite(raw) ? Math.min(Math.max(Math.trunc(raw), 1), 50) : 10;
+    res.json(await getRecentUploads(limit));
+  } catch (err) { next(err); }
+});
+
+/**
+ * GET /dashboard/trend
+ * Uploads per month for the dashboard area chart.
+ */
+app.get("/dashboard/trend", requireAuth, async (req, res, next) => {
+  try {
+    const raw    = Number(req.query.months);
+    const months = Number.isFinite(raw) ? Math.min(Math.max(Math.trunc(raw), 2), 24) : 6;
+    res.json(await getUploadTrend(months));
+  } catch (err) { next(err); }
 });
 
 /**

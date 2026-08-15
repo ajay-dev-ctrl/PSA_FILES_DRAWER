@@ -556,6 +556,186 @@ textarea { min-height: 110px; resize: vertical; }
 .stat-dot--ok   { background: #2e7d46; }
 .stat-dot--miss { background: var(--psa-red); }
 
+/* ═══════════════════════════════════════════════════════════════════
+   DASHBOARD HERO — figures + trend chart, donut alongside
+   ═══════════════════════════════════════════════════════════════════ */
+.hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2.15fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+@media (max-width: 1080px) { .hero-grid { grid-template-columns: 1fr; } }
+
+.hero-panel { margin-bottom: 0; }
+
+.hero-body {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.5fr) minmax(0, 1.5fr);
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 720px) { .hero-body { grid-template-columns: 1fr; } }
+
+.hero-eyebrow {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--psa-navy);
+  letter-spacing: -0.02em;
+}
+.hero-sub {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin-bottom: 18px;
+}
+.hero-value {
+  font-size: 2.1rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--psa-navy);
+  letter-spacing: -0.03em;
+}
+.hero-value--sm { font-size: 1.6rem; margin-top: 16px; }
+.hero-caption {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.hero-chart { min-width: 0; }
+.hero-chart__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.chart-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.chart-legend__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2f5d9e;
+}
+
+/* Same single magnitude hue as .rank-fill — a count of uploads is not a status. */
+.area-chart { width: 100%; height: auto; display: block; overflow: visible; }
+.area-grid   { stroke: var(--bg); stroke-width: 1; }
+.area-axis   { fill: var(--text-muted); font-size: 10px; font-weight: 500; }
+.area-line   { fill: none; stroke: #2f5d9e; stroke-width: 2.4; stroke-linecap: round; }
+.area-dot    { fill: #fff; stroke: #2f5d9e; stroke-width: 2.4; }
+
+/* KPI strip — secondary counts, sitting under the hero figures */
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--bg);
+}
+.kpi { display: flex; align-items: center; gap: 11px; }
+/* One tinted treatment for all four — the glyph distinguishes them, not colour. */
+.kpi__icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  background: #eaf1fb;
+  color: var(--psa-blue);
+  flex-shrink: 0;
+}
+.kpi__label { font-size: 0.73rem; color: var(--text-muted); font-weight: 600; }
+.kpi__value {
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Donut ─────────────────────────────────────────────────────────────── */
+.donut-panel { margin-bottom: 0; }
+.donut-wrap { display: grid; gap: 18px; }
+.donut { position: relative; display: grid; place-items: center; }
+.donut svg { width: 100%; max-width: 200px; height: auto; display: block; }
+.donut-track { stroke: var(--surface-2); }
+.donut-center {
+  position: absolute;
+  text-align: center;
+  pointer-events: none;
+}
+.donut-center__value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--psa-navy);
+  letter-spacing: -0.02em;
+}
+.donut-center__label { font-size: 0.7rem; color: var(--text-muted); font-weight: 600; }
+
+.donut-legend {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  text-align: center;
+}
+.donut-legend__pct {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.donut-legend__name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  line-height: 1.3;
+}
+.donut-legend__dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+/* ── Gradient KPI tiles ────────────────────────────────────────────────── */
+.grad-tile {
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+  min-height: 104px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.grad-tile__label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  opacity: 0.92;
+  margin-bottom: 4px;
+}
+.grad-tile__value {
+  font-size: 1.85rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+}
+.grad-tile__foot { font-size: 0.72rem; opacity: 0.86; margin-top: 3px; }
+/* One navy→blue ramp, deepest first. Depth carries the ordering, not hue. */
+.grad-tile--d1 { background: linear-gradient(135deg, var(--psa-navy), #1a3a6b); }
+.grad-tile--d2   { background: linear-gradient(135deg, #1a3a6b, #2f5d9e); }
+.grad-tile--d3   { background: linear-gradient(135deg, #2b5896, #3f74bd); }
+.grad-tile--d4 { background: linear-gradient(135deg, #3d6cae, #5a8ecd); }
+
 /* ── Dashboard: ranked horizontal bars ──────────────────────────────────────
    One hue only. A count of missing documents is a magnitude, not a status, so
    the red/green status colours stay reserved for actual state. */
@@ -597,6 +777,91 @@ textarea { min-height: 110px; resize: vertical; }
 }
 .rank-fill--soft { background: #7fa3d4; }
 .rank-more { margin-top: 14px; }
+
+/* A bar that also filters. Button reset first — .rank-row is a grid, not a control. */
+.rank-row--clickable {
+  border: 0;
+  background: transparent;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  width: calc(100% + 12px);
+  border-radius: var(--radius-sm);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  box-shadow: none;
+  transition: background 0.12s;
+}
+.rank-row--clickable:hover { background: #f4f7fb; box-shadow: none; }
+.rank-row--active { background: #eaf1fb; }
+.rank-row--active .rank-name { font-weight: 700; }
+.rank-row--active .rank-fill { background: var(--psa-blue); }
+
+/* ── Dashboard header controls ─────────────────────────────────────────── */
+.dash-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.dash-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+/* Which records the whole page counts — separated staff skew every figure. */
+.scope-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface);
+}
+.scope-btn {
+  padding: 7px 13px;
+  border: 0;
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  box-shadow: none;
+  transition: background 0.12s, color 0.12s;
+}
+.scope-btn + .scope-btn { border-left: 1px solid var(--border); }
+.scope-btn:hover { background: var(--surface-2); color: var(--text); box-shadow: none; }
+.scope-btn--on {
+  background: var(--psa-blue);
+  color: #fff;
+}
+.scope-btn--on:hover { background: #0f2a55; color: #fff; }
+
+.dash-scope-note {
+  margin: -8px 0 16px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* Active office filter on the Needs-attention panel */
+.dash-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+  padding: 4px 10px;
+  border: 1px solid var(--psa-blue);
+  border-radius: 999px;
+  background: #eaf1fb;
+  color: var(--psa-blue);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: none;
+}
+.dash-filter-chip:hover { background: #dbe8f8; box-shadow: none; }
 
 .panel-meta { font-size: 0.75rem; color: var(--text-muted); }
 
@@ -644,6 +909,8 @@ textarea { min-height: 110px; resize: vertical; }
   font-variant-numeric: tabular-nums;
 }
 .att-count--zero { color: var(--psa-red); }
+/* Timestamps are context, not a figure to compare — they recede. */
+.att-count--muted { color: var(--text-muted); font-weight: 600; }
 
 /* Employees page filter bar — search and filters share one row */
 .filter-bar {

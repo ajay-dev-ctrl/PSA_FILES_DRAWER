@@ -766,12 +766,66 @@ export async function getDashboardSummary() {
       COALESCE(
         ARRAY_AGG(f.doc_item) FILTER (WHERE f.doc_item IS NOT NULL),
         ARRAY[]::text[]
-      ) AS completed_items
+      ) AS completed_items,
+      MAX(f.uploaded_at) AS last_upload_at
     FROM memories m
     LEFT JOIN files f ON f.memory_id = m.id
     WHERE m.kind = 'position_input'
     GROUP BY m.id
     ORDER BY m.created_at DESC
   `);
+  return result.rows;
+}
+
+/**
+ * Uploads per month for the trailing `months` window, zero-filled so the chart
+ * keeps an even x-axis through months where nothing was filed.
+ */
+export async function getUploadTrend(months = 6) {
+  const result = await pool.query(
+    `
+    WITH span AS (
+      SELECT generate_series(
+        date_trunc('month', NOW()) - MAKE_INTERVAL(months => $1::int - 1),
+        date_trunc('month', NOW()),
+        '1 month'
+      ) AS month
+    )
+    SELECT
+      to_char(s.month, 'YYYY-MM') AS month,
+      COUNT(f.id)::int           AS uploads
+    FROM span s
+    LEFT JOIN files f
+      ON date_trunc('month', f.uploaded_at) = s.month
+    GROUP BY s.month
+    ORDER BY s.month
+  `,
+    [months]
+  );
+  return result.rows;
+}
+
+/**
+ * The most recent uploads across the whole agency — "what moved this week".
+ * Joined back to memories so the feed can name the employee, not just the file.
+ */
+export async function getRecentUploads(limit = 10) {
+  const result = await pool.query(
+    `
+    SELECT
+      f.id,
+      f.doc_item,
+      f.filename,
+      f.uploaded_at,
+      m.id   AS memory_id,
+      m.content->>'name' AS employee_name,
+      COALESCE(m.content->>'officeDivision', m.content->>'source', 'unknown') AS office_division
+    FROM files f
+    JOIN memories m ON m.id = f.memory_id
+    ORDER BY f.uploaded_at DESC
+    LIMIT $1
+  `,
+    [limit]
+  );
   return result.rows;
 }
